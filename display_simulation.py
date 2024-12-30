@@ -11,25 +11,25 @@ def plot_data(filename):
     system_size = float(f.readline())
     N = int(f.readline())
     steps = int(f.readline())
+    resolution = int(f.readline())
+    steps = steps//resolution
     x = np.zeros((N,steps))
     y = np.zeros((N,steps))
     z = np.zeros((N,steps))
+    e_pot = np.zeros(steps)
+    e_kin = np.zeros(steps)
     for idx, line in enumerate(f):
-        if idx == N*steps:
-            break
+        step = idx//(N+1)
+        idx = idx % (N+1)
         data = line.split()
-        # load the x, y, z coordinates into the arrays
-        x[idx%N, idx//N] = float(data[0])
-        y[idx%N, idx//N] = float(data[1])
-        z[idx%N, idx//N] = float(data[2])
-    e_pot = np.zeros(steps-1)
-    e_kin = np.zeros(steps-1)
-    for idx, line in enumerate(f):
-        if idx == steps-1:
-            break
-        data = line.split()
-        e_pot[idx] = float(data[0])/kB
-        e_kin[idx] = float(data[1])/kB
+        if len(data) == 2:
+            e_pot[step] = float(data[0])/kB
+            e_kin[step] = float(data[1])/kB
+        else:
+            # load the x, y, z coordinates into the arrays
+            x[idx, step] = float(data[0])
+            y[idx, step] = float(data[1])
+            z[idx, step] = float(data[2])
     f.close()
     # Create animation, plot the data
     fig = plt.figure()
@@ -48,7 +48,7 @@ def plot_data(filename):
         return sc,
 
     # Create the animation, which shows every 50th frame
-    ani = FuncAnimation(fig, update, frames=range(0, steps, 50), blit=True)
+    ani = FuncAnimation(fig, update, frames=steps, blit=True)
     # Save the animation as a video file
     output_file = 'particles_animation.mp4'
     writer = FFMpegWriter(fps=30, metadata={'artist': 'Matplotlib'}, bitrate=2400)

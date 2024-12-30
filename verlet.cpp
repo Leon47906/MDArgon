@@ -16,7 +16,7 @@ std::vector<Vec3> cubicLattice(int N, double system_size) {
     int cube_number = cube_root * cube_root * cube_root;
 
     // Calculate the lattice spacing
-    double lattice_spacing = system_size / cube_root;
+    double lattice_spacing = system_size / (2*cube_root);
     if (lattice_spacing <= 0) {
         throw std::runtime_error("Lattice spacing must be greater than 0.");
     }
@@ -47,14 +47,15 @@ std::vector<Vec3> cubicLattice(int N, double system_size) {
 int main(int argc, char *argv[]) {
     // parameters
     double system_size, T_init, dt;
-    int N, steps;
+    int N, steps, resolution;
     std::vector<Vec3> positions, velocities;
-    if (argc == 6) {
+    if (argc == 7) {
         system_size = atof(argv[1])*nm;
         N = atoi(argv[2]);
         T_init = atof(argv[3]);
         steps = atoi(argv[4]);
         dt = atof(argv[5])*fs;
+        resolution = atof(argv[6]);
         positions.resize(N, Vec3());
         velocities.resize(N, Vec3());
         positions = cubicLattice(N, system_size);
@@ -85,43 +86,36 @@ int main(int argc, char *argv[]) {
                       Vec3(80.00, 90.00, 0), Vec3(-40.00, 100.00, 0), Vec3(-80.00, -60.00, 0)};
     }
     else {
-        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [steps] [dt]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [steps] [dt] [resolution]" << std::endl;
         return -1;
     }
+    char filename[]= "data.txt";
     System atom_system(system_size, positions, velocities);
     //start time measurement
    	auto start = std::chrono::high_resolution_clock::now();
     // run the simulation
-    std::pair <std::vector<std::vector<Vec3>>,std::vector<std::array<double,2>>> sim = atom_system.run(steps, dt);
-    std::vector<std::vector<Vec3>> data = sim.first;
-    std::vector<std::array<double,2>> energies = sim.second;
+    atom_system.run(steps, dt, &filename[0], resolution);
+    //std::vector<std::vector<Vec3>> data = sim.first;
+    //std::vector<std::array<double,2>> energies = sim.second;
     //end time measurement
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_seconds = end-start;
     std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
-    if (argc == 6) {
-        double V = system_size * system_size * system_size;
-        double A = 0.1363;
-        double B = 3.22*std::pow(10,-5);
-        std::cout << "Temperature: " << T_init << "K\n";
-        std::cout << "Number of atoms: " << N << "\n";
-        // calculate the pressure in bar, with the van der Waals equation of state
-        double p = vanDerWaalsPressure(T_init, V, N, A, B);
-        std::cout << "Pressure: " << p*std::pow(10,-5) << " bar\n";
-    }
     // write the data to a file, which can be visualized with an animation through python
+    /*
     std::cout << "Writing to file...\n";
     std::ofstream file("data.txt");
-    file << system_size << "\n" <<  N <<  "\n" << steps << "\n";
-    for (int i = 0; i < steps; i++) {
+    file << system_size << "\n" <<  N <<  "\n" << steps << "\n" << resolution << "\n";
+    for (int i = 0; i < steps; i+=resolution) {
         for (int j = 0; j < N; j++) {
-            file << std::setprecision(6) << data[i][j].getX() << " " << data[i][j].getY() << " " << data[i][j].getZ() << "\n";
+            file << std::setprecision(6) << data[i][j].getX() << " " << data[i][j].getY() << " " << data[i][j].getZ() << std::endl;
         }
     }
     for (int i = 0; i < steps; i++) {
         file << std::setprecision(6) << energies[i][0] << " " << energies[i][1] << "\n";
     }
     file.close();
+     */
     std::cout << "Data written to data.txt\n";
     return 0;
 }
