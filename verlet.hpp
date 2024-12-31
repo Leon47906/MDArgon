@@ -223,6 +223,10 @@ class System{
     inline double getPotentialEnergy() const {
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
+    inline std::vector<double> getPotentialEnergies() const { return E_pot; }
+    inline void updatePotentialEnergies(const std::vector<double>& new_potentials) {
+        	E_pot = new_potentials;
+    }
     // I want to implement a function, that give me the indices of the neighboring cells
     inline int getCell(Vec3 position) const {
         //Vec3 position = atoms[atom_index].getPosition();
