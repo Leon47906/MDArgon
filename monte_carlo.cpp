@@ -1,6 +1,7 @@
 #include "verlet.hpp"
 #include <chrono>
 #include <fstream>
+#include <omp.h>
 
 std::array<double, 100> polarangles, azimuthalangles;
 std::array<Vec3, 10000> vs;
@@ -73,9 +74,11 @@ void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr, const int &
     const std::vector<double> &potential = atom_system.getPotentialEnergies();
     const double system_size = atom_system.getSystemSize();
     const Vec3 position = atom_system.getAtom(atom_idx).getPosition();
-    const int random_index = std::floor(10000 * rd());
-    const Vec3 velocity = dr * vs[random_index];
-    const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, velocity, 1.0);
+    //const int random_index = std::floor(10000 * rd());
+    //const Vec3 velocity = dr * vs[random_index];
+    //const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, velocity, 1.0);
+    const Vec3 displacement = dr/std::sqrt(3) * Vec3(1-2*rd(), 1-2*rd(), 1-2*rd());
+    const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
     double acceptance_rate;
     std::vector<double> dpotentials;
     tie(acceptance_rate, dpotentials) = acceptanceRate(atom_system, sum_of_potentials, atom_idx, prop_position, T);
@@ -96,6 +99,7 @@ void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr, UniformRan
               , const double &T, int *Naccept_ptr) {
     System &atom_system = *atom_system_ptr;
     const int N = atom_system.getN();
+    //#pragma omp parallel for
     for (int i = 0; i < N; i++) {
         MC_step(&atom_system, sum_of_potentials_ptr, i, rd_ptr, dr, T, Naccept_ptr);
     }
@@ -127,10 +131,26 @@ int main(int argc, char *argv[]) {
     double potentialEnergies = atom_system.computePotentialEnergy();
     std::ofstream file("MCdata.txt");
     file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << resolution << "\n";
-    int runup = 5000, dummy = 0;
+    double dummy_potential = 0;
+    int runup = 1000, dummy = 0;
     for (int i = 0; i < runup; i++) {
-        MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &dummy);
+        MC_sweep(&atom_system, &dummy_potential, &random, dr, T_init, &dummy);
+        /*
+        if (i % (runup/50) == 0) {
+            int barWidth = 50;
+            std::cout << "Runup [";
+            int pos = barWidth * i / runup;
+            for (int j = 0; j < barWidth; ++j) {
+                if (j < pos) std::cout << "=";
+                else if (j == pos) std::cout << ">";
+                else std::cout << " ";
+            }
+            std::cout << "] " << 2*int(i * 50 / runup) << " % " << "\r";
+            std::cout.flush();
+        }
+        */
     }
+    //std::cout << "Runup [" << std::string(50, '=') << "] 100 %" << std::endl;
     for (int i = 0; i < sweeps; i++) {
     	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
@@ -147,13 +167,13 @@ int main(int argc, char *argv[]) {
             std::cout.flush();
         }
         if (i % resolution == 0) {
-        	/*
+
         	std::vector<Vec3> data = atom_system.getData();
         	for (int j = 0; j < N; j++) {
         	    file << data[j].getX() << " " << data[j].getY() << " " << data[j].getZ() << "\n";
         	}
-        	 */
-            file << potentialEnergies << std::endl;
+
+            file << potentialEnergies << " " << 0 << std::endl;
 		}
     }
     std::cout << "[" << std::string(50, '=') << "] 100%\n";
