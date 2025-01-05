@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.constants
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from scipy.cluster.hierarchy import average
 from sympy.physics.mechanics import potential_energy
+from sympy.physics.units import avogadro_number
 
 
 def energies(filename):
@@ -15,13 +17,14 @@ def energies(filename):
     N = int(f.readline())
     sweeps = int(f.readline())
     resolution = int(f.readline())
+    print(f'Density: {N/scipy.constants.N_A/system_size**3/1000} moles per liter')
     sweeps = sweeps//resolution
     e_pot = np.zeros(sweeps)
     for idx, line in enumerate(f):
         data = line.split()
         e_pot[idx] = float(data[0])/kB
     f.close()
-    return e_pot
+    return e_pot/N
 
 
 def plot_energy(data, filename="energies.png"):
@@ -47,6 +50,7 @@ def binning_analysis_with_variance(data):
     max_bin_size = 2**int(np.floor(np.log2(n)))  # Maximum bin size as a power of 2
     results = {'bin_size': [], 'variance': []}
     total_variance = np.var(data)
+    print(data.mean())
     print(total_variance)
     bin_size = 1
     while bin_size <= max_bin_size:
@@ -99,7 +103,7 @@ def plot_means(data, resolution=1, correlation_time=1, filename="means.png"):
     plt.figure(figsize=(8, 6))
     plt.errorbar(resolution*np.arange(plot_length), means, yerr=3*errors, fmt='-', color='blue', ecolor='red', capsize=5)
     plt.xlabel("Sweeps", fontsize=14)
-    plt.ylabel("Mean Potential Energy (kB)", fontsize=14)
+    plt.ylabel("Mean Potential Energy (kB) per particle", fontsize=14)
     plt.title("Mean Potential Energy vs Sweeps", fontsize=16)
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.savefig(filename, dpi=300)
@@ -112,4 +116,4 @@ if __name__ == "__main__":
     potential_energies = energies("MCdata.txt")
     analysis_results = binning_analysis_with_variance(potential_energies)
     save_binning_variance_plot(analysis_results)
-    plot_means(potential_energies,200,1)
+    plot_means(potential_energies,500,70)

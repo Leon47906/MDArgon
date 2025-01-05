@@ -1,5 +1,4 @@
 #include "verlet.hpp"
-#include <chrono>
 #include <fstream>
 #include <omp.h>
 
@@ -147,82 +146,72 @@ void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr, UniformRan
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 7) {
-        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [resolution]" << std::endl;
+    if (argc != 1) {
+        std::cout << "Usage: " << argv[0] << std::endl;
         return -1;
     }
     // parameters
     UniformRandomDouble random;
     std::vector<Vec3> positions, velocities;
-    double system_size = atof(argv[1])*nm;
-    int N = atoi(argv[2]);
-    double T_init = atof(argv[3]);
-    int sweeps = atoi(argv[4]);
-    double dr = atof(argv[5])*nm;
-    int resolution = atoi(argv[6]);
+    //std::array<double, 10> system_sizes = {1.18419e-8, 9.39889e-9, 8.21068e-9, 7.4599e-9,
+    //                                       6.92516e-9, 6.51682e-9, 6.19042e-9, 5.92093e-9,
+    //                                       5.69297e-9, 5.4965e-9};
+    std::array<double, 5> system_sizes = {1.18419e-8, 9.39889e-9, 8.21068e-9, 7.4599e-9, 6.92516e-9};
+    int N = 1000;
+    //std::array<double, 10> temperatures = {60, 90, 120, 150, 180, 210, 240, 270, 300, 330};
+    std::array<double, 5> temperatures = {30, 60, 90, 120, 150};
+    std::array<std::array<double, 2>, 25> system_info;
+    int sweeps = 10000;
+    double dr = 0.165*nm;
+    std::array<double, 25> potentialEnergies, stdDeviations;
+    potentialEnergies.fill(0);
+    stdDeviations.fill(0);
     initialize_vs();
-    positions.resize(N, Vec3());
     velocities.resize(N, Vec3());
-    //positions = randomDist(N, system_size, &random);
-    positions = cubicLattice(N, system_size);
-    velocities.resize(N, Vec3());
-    System atom_system(system_size, positions, velocities);
-    // start the timer
-    auto start = std::chrono::high_resolution_clock::now();
-    atom_system.computePotentialEnergy();
-    double potentialEnergies = atom_system.computePotentialEnergy();
-    std::ofstream file("MCdata.txt");
-    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << resolution << "\n";
-    double dummy_potential = 0;
-    int runup = 1000, dummy = 0;
-    for (int i = 0; i < runup; i++) {
-        MC_sweep(&atom_system, &dummy_potential, &random, dr, T_init, &dummy);
-        /*
-        if (i % (runup/50) == 0) {
-            int barWidth = 50;
-            std::cout << "Runup [";
-            int pos = barWidth * i / runup;
-            for (int j = 0; j < barWidth; ++j) {
-                if (j < pos) std::cout << "=";
-                else if (j == pos) std::cout << ">";
-                else std::cout << " ";
+    #pragma omp parallel for
+    for (int i = 0; i < system_sizes.size(); i++) {
+        for (int j = 0; j < temperatures.size(); j++) {
+            double system_size = system_sizes[i];
+            double T_init = temperatures[j];
+            std::vector<double> sweep_potentials(sweeps, 0);
+            positions.resize(N, Vec3());
+            positions = cubicLattice(N, system_size);
+            System atom_system(system_size, positions, velocities);
+            atom_system.computePotentialEnergy();
+            double potentialEnergy = atom_system.computePotentialEnergy();
+            int runup = 1000, dummy = 0;
+            for (int i = 0; i < runup; i++) {
+                MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &dummy);
             }
-            std::cout << "] " << 2*int(i * 50 / runup) << " % " << "\r";
-            std::cout.flush();
-        }
-        */
-    }
-    //std::cout << "Runup [" << std::string(50, '=') << "] 100 %" << std::endl;
-    for (int i = 0; i < sweeps; i++) {
-    	int Naccept = 0;
-        MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
-        if (i % (sweeps/50) == 0) {
-            int barWidth = 50;
-            std::cout << "[";
-            int pos = barWidth * i / sweeps;
-            for (int j = 0; j < barWidth; ++j) {
-                if (j < pos) std::cout << "=";
-                else if (j == pos) std::cout << ">";
-                else std::cout << " ";
+            for (int i = 0; i < sweeps; i++) {
+            	int Naccept = 0;
+                MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &Naccept);
+                sweep_potentials[i] = potentialEnergy;
             }
-            std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(Naccept)/(N) << "\r";
-            std::cout.flush();
+            potentialEnergies[i*system_sizes.size() + j] = potentialEnergy;
+            double sum = std::accumulate(sweep_potentials.begin(), sweep_potentials.end(), 0.0);
+            double mean = sum / sweeps;
+            double accum = 0.0;
+            std::for_each (sweep_potentials.begin(), sweep_potentials.end(), [&](const double d) {
+                accum += (d - mean) * (d - mean);
+            });
+            stdDeviations[i*system_sizes.size() + j] = std::sqrt(accum / (sweeps-1))*std::sqrt(1.0/sweeps);
         }
-        if (i % resolution == 0) {
-			/*
-        	std::vector<Vec3> data = atom_system.getData();
-        	for (int j = 0; j < N; j++) {
-        	    file << data[j].getX() << " " << data[j].getY() << " " << data[j].getZ() << "\n";
-        	}
-			*/
-            file << potentialEnergies << " " << 0 << std::endl;
-		}
     }
-    std::cout << "[" << std::string(50, '=') << "] 100%\n";
+    std::ofstream file("potentialEnergies.txt");
+    for (double i : system_sizes) {
+        file << i << " ";
+    }
+    file << "\n";
+    for (double i : temperatures) {
+        file << i << " ";
+    }
+    file << "\n";
+    for (int i = 0; i < system_sizes.size(); i++) {
+        for (int j = 0; j < temperatures.size(); j++) {
+            file << i << " " << j << " " << potentialEnergies[i*system_sizes.size() + j] << " " << stdDeviations[i*system_sizes.size() + j] << "\n";
+        }
+    }
     file.close();
-    // stop the timer
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed_seconds = stop-start;
-    std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
     return 0;
 }
