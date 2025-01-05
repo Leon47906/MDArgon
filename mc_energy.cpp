@@ -195,7 +195,7 @@ int main(int argc, char *argv[]) {
             std::for_each (sweep_potentials.begin(), sweep_potentials.end(), [&](const double d) {
                 accum += (d - mean) * (d - mean);
             });
-            stdDeviations[i*system_sizes.size() + j] = std::sqrt(accum / (sweeps-1))*std::sqrt(1.0/sweeps);
+            stdDeviations[i*system_sizes.size() + j] = std::sqrt(accum / (sweeps-1));
         }
     }
     std::ofstream file("potentialEnergies.txt");
