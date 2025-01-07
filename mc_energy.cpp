@@ -156,52 +156,57 @@ int main(int argc, char *argv[]) {
     //std::array<double, 10> system_sizes = {1.18419e-8, 9.39889e-9, 8.21068e-9, 7.4599e-9,
     //                                       6.92516e-9, 6.51682e-9, 6.19042e-9, 5.92093e-9,
     //                                       5.69297e-9, 5.4965e-9};
-    std::array<double, 8> system_sizes = {1.66e-8, 1.36e-8,1.18419e-8, 9.39889e-9, 8.21068e-9, 7.4599e-9, 6.92516e-9, 6.51682e-9};
+    //std::array<double, 8> system_sizes = {1.66e-8, 1.36e-8,1.18419e-8, 9.39889e-9, 8.21068e-9, 7.4599e-9, 6.92516e-9, 6.51682e-9};
+    std::array<double, 3> system_sizes = {1.66e-8, 1.36e-8, 1.18419e-8};
     int N = 1000;
     //std::array<double, 10> temperatures = {60, 90, 120, 150, 180, 210, 240, 270, 300, 330};
-    std::array<double, 8> temperatures = {20, 30, 50, 60, 90, 120, 150, 180};
+    //std::array<double, 8> temperatures = {20, 30, 50, 60, 90, 120, 150, 180};
+    std::array<double, 3> temperatures = {20, 30, 50};
     int sweeps = 10000;
     double dr = 0.165*nm;
-    std::array<double, 64> potentialEnergies, stdDeviations;
+    std::array<double, 9> potentialEnergies, stdDeviations;
     potentialEnergies.fill(0);
     stdDeviations.fill(0);
     // start a timer
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     //initialize_vs();
-    #pragma omp parallel for shared(potentialEnergies, stdDeviations)
+//#pragma omp target data map(to: system_sizes[0:system_sizes.size()], temperatures[0:temperatures.size()]) \
+//                        map(from: potentialEnergies[0:potentialEnergies.size()], stdDeviations[0:stdDeviations.size()])
+//    {
+//    #pragma omp target teams distribute parallel for
+    #pragma omp distribute parallel for
     for (int idx = 0; idx < potentialEnergies.size(); idx++) {
     	int i = idx / system_sizes.size();
         int j = idx % temperatures.size();
-        //for (int j = 0; j < temperatures.size(); j++) {
-            std::vector<Vec3> positions, velocities;
-            velocities.resize(N, Vec3());
-            double system_size = system_sizes[i];
-            double T_init = temperatures[j];
-            std::vector<double> sweep_potentials(sweeps, 0);
-            positions.resize(N, Vec3());
-            positions = cubicLattice(N, system_size);
-            System atom_system(system_size, positions, velocities);
-            atom_system.computePotentialEnergy();
-            double potentialEnergy = atom_system.computePotentialEnergy();
-            int runup = 1000, dummy = 0;
-            for (int i = 0; i < runup; i++) {
-                MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &dummy);
-            }
-            for (int i = 0; i < sweeps; i++) {
-            	int Naccept = 0;
-                MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &Naccept);
-                sweep_potentials[i] = potentialEnergy;
-            }
-            double sum = std::accumulate(sweep_potentials.begin(), sweep_potentials.end(), 0.0);
-            double mean = sum / sweeps;
-            double accum = 0.0;
-            std::for_each (sweep_potentials.begin(), sweep_potentials.end(), [&](const double d) {
-                accum += (d - mean) * (d - mean);
-            });
-            potentialEnergies[i*system_sizes.size() + j] = potentialEnergy;
-            stdDeviations[i*system_sizes.size() + j] = std::sqrt(accum / (sweeps-1));
-        //}
+        std::vector<Vec3> positions, velocities;
+        velocities.resize(N, Vec3());
+        positions.resize(N, Vec3());
+        double system_size = system_sizes[i];
+        double T_init = temperatures[j];
+        std::vector<double> sweep_potentials(sweeps, 0);
+        positions = cubicLattice(N, system_size);
+        System atom_system(system_size, positions, velocities);
+        atom_system.computePotentialEnergy();
+        double potentialEnergy = atom_system.computePotentialEnergy();
+        int runup = 1000, dummy = 0;
+        for (int i = 0; i < runup; i++) {
+        	MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &dummy);
+        }
+        for (int i = 0; i < sweeps; i++) {
+        	int Naccept = 0;
+            MC_sweep(&atom_system, &potentialEnergy, &random, dr, T_init, &Naccept);
+            sweep_potentials[i] = potentialEnergy;
+        }
+        double sum = std::accumulate(sweep_potentials.begin(), sweep_potentials.end(), 0.0);
+        double mean = sum / sweeps;
+        double accum = 0.0;
+        std::for_each (sweep_potentials.begin(), sweep_potentials.end(), [&](const double d) {
+        	accum += (d - mean) * (d - mean);
+        });
+        potentialEnergies[i*system_sizes.size() + j] = potentialEnergy;
+        stdDeviations[i*system_sizes.size() + j] = std::sqrt(accum / (sweeps-1));
     }
+    //}
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_span = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << "Time elapsed: " << time_span.count() << " seconds." << std::endl;
