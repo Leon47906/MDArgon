@@ -6,10 +6,14 @@
 #include <algorithm>
 #include <fstream>
 #include <omp.h>
+#include <numeric>
+#include <math.h>
 #include "fastinversesquareroot.hpp"
 
 #ifndef VERLET_HPP
 #define VERLET_HPP
+#define M_PI 3.14159265358979323846
+#define M_2_SQRTPI 1.1283791670955125738961589
 
 static constexpr double kB = 1.38064852e-23;
 static constexpr double nm = 1e-9;//nanometer
