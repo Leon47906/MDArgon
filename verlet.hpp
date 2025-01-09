@@ -9,60 +9,40 @@
 #include <numeric>
 #include <math.h>
 #include "fastinversesquareroot.hpp"
+#include <chrono>
 
 #ifndef VERLET_HPP
 #define VERLET_HPP
 #define M_PI 3.14159265358979323846
 #define M_2_SQRTPI 1.1283791670955125738961589
 
-static constexpr double kB = 1.38064852e-23;
-static constexpr double nm = 1e-9;//nanometer
-static constexpr double ns = 1e-9;//nanosecond
-static constexpr double fs = 1e-15;//femtosecond
-static constexpr double Sigma = 0.33916*nm;
-static constexpr double Sigma2 = Sigma*Sigma;
-static constexpr double Sigma6 = Sigma2*Sigma2*Sigma2;
-static constexpr double Sigma12 = Sigma6*Sigma6;
-static constexpr double cutoff = 2.5*Sigma;
-static constexpr double Epsilon = 137.9*kB;
-static constexpr double shift = -4*Epsilon*0.004079222784;
-static constexpr double Mass = 6.6335209e-26;
-static constexpr double ForceConstant = 24*Epsilon/(Sigma*Mass);
-static constexpr double one_over_sqrt_pi = 0.5*M_2_SQRTPI;
-static constexpr double Avogadro = 6.02214076e23;
-static constexpr double V_min = 10*kB;
+static constexpr float shift = -0.016316891136;
+static constexpr float Mass = 39.948; //Mass in Dalton
+static constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
 
 
-inline double LennardJones(double r2) {
-  	double r6 = r2*r2*r2;
-    return 4*Epsilon/r6*(Sigma12/r6 - Sigma6)-shift;
+inline float LennardJones(float r2) {
+	if (r2 > 6.25) return 0;
+  	float r6 = r2*r2*r2;
+    return 4/r6*(1/r6 - 1)-shift;
 }
 
-double vanDerWaalsPressure(double T, double V, double N, double a, double b) {
-    // Umrechnungen für die Van-der-Waals-Parameter
-    double a_prime = a / (Avogadro * Avogadro);   // Wechselwirkungsparameter pro Teilchenpaar
-    double b_prime = b / Avogadro;           // Eigenvolumen pro Teilchen
-    // Berechnung des Drucks
-    double P = (N * kB * T / (V - N * b_prime)) - (a_prime * N * N / (V * V));
-    return P;
-}
-
-class UniformRandomDouble{
+class UniformRandomFloat{
     std::random_device rd;
     std::mt19937 gen;
-    std::uniform_real_distribution<double> dis;
+    std::uniform_real_distribution<float> dis;
     public:
-    UniformRandomDouble() : gen(rd()), dis(0, 1) {}
-    double operator()() {
+    UniformRandomFloat() : gen(rd()), dis(0, 1) {}
+    float operator()() {
         return dis(gen);
     }
 };
 
 class Vec3{
-	double x, y, z;
+	float x, y, z;
     public:
 	Vec3() : x(0), y(0), z(0) {}
-	Vec3(double _x, double _y, double _z) : x(_x), y(_y), z(_z) {}
+	Vec3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 	Vec3(const Vec3& v) : x(v.x), y(v.y), z(v.z) {}
     Vec3& operator=(const Vec3& v) {
         x = v.x;
@@ -88,16 +68,25 @@ class Vec3{
         z -= v.z;
         return *this;
     }
-    Vec3 operator*(double s) const {
+    Vec3 operator*(float s) const {
         return Vec3(x * s, y * s, z * s);
     }
-    friend Vec3 operator*(double s, const Vec3& v) {
+    friend Vec3 operator*(float s, const Vec3& v) {
         return v * s;
     }
-    double getX() const { return x; }
-    double getY() const { return y; }
-    double getZ() const { return z; }
-    double norm2() const { return x*x + y*y + z*z; }
+	Vec3 operator/(float s) const {
+		if (s == 0) {
+			throw std::invalid_argument("Division by zero.");
+		}
+		return Vec3(x / s, y / s, z / s);
+	}
+	friend Vec3 operator/(float s, const Vec3& v) {
+		return v / s;
+	}
+    float getX() const { return x; }
+    float getY() const { return y; }
+    float getZ() const { return z; }
+    float norm2() const { return x*x + y*y + z*z; }
     Vec3 Zero() const { return Vec3(0, 0, 0); }
 };
 
@@ -125,42 +114,27 @@ class Atom{
     void setVelocity(const Vec3& velocity) { this->velocity = velocity; }
 };
 
-inline double ComputeAccel(double r2) {
-    if (r2 > cutoff*cutoff) return 0;
+inline float ComputeAccel(float r2) {
+    if (r2 > 6.25) return 0;
     else {
-    	double r6 = r2*r2*r2;
-        double r_inv = 1/std::sqrt(r2);
-        return ForceConstant *  Sigma * r_inv / r6 * (2 * Sigma12/r6 - Sigma6);
+    	float r6 = r2*r2*r2;
+        float r_inv = 1/std::sqrt(r2);
+        return 24.0 * r_inv / r6 * (2.0/r6 - 1.0);
     }
 }
 
-auto pot = [](double u, double system_size) { return std::cos(u/system_size*2*M_PI)-1; };
-auto dpot = [](double u, double system_size) { return -1*std::sin(u/system_size*2*M_PI)*2*M_PI/system_size; };
-double confiningPotential(const Vec3& position, double L) {
-    return 0.25*V_min*(pot(position.getX(),L)+pot(position.getY(),L)+pot(position.getZ(),L));
-}
-
-Vec3 confiningAccel(const Vec3& position, double system_size) {
-    double x = position.getX();
-    double y = position.getY();
-    double z = position.getZ();
-    double ax = dpot(x,system_size)*pot(y,system_size)*pot(z,system_size);
-    double ay = pot(x,system_size)*dpot(y,system_size)*pot(z,system_size);
-    double az = pot(x,system_size)*pot(y,system_size)*dpot(z,system_size);
-    return -0.25*V_min*2*M_PI/system_size/Mass*Vec3(ax,ay,az);
-}
 
 
 class System{
-    double system_size, N;
-    int box_N=std::ceil(system_size/cutoff);
-    double box_L=system_size/box_N;
+    float system_size, N;
+    int box_N=std::ceil(system_size/2.5);
+    float box_L=system_size/box_N;
     std::vector<std::vector<int>> cells;
     std::vector<Atom> atoms;
     std::vector<Vec3> accels;
-    std::vector<double> E_pot, E_kin;
+    std::vector<float> E_pot, E_kin;
     public:
-    System(double _system_size, std::vector<Vec3> _positions, std::vector<Vec3> _velocities) : system_size(_system_size), N(_positions.size()) {
+    System(float _system_size, std::vector<Vec3> _positions, std::vector<Vec3> _velocities) : system_size(_system_size), N(_positions.size()) {
         accels.resize(N, Vec3());
         E_pot.resize(N,0);
         E_kin.resize(N,0);
@@ -176,34 +150,6 @@ class System{
             cells[index].push_back(i);
         }
     }
-    /*
-    System(double _system_size, double _N, double _T_init) : system_size(_system_size*nm), N(_N), T_init(_T_init) {
-        accels.resize(N*N*N, Vec3());
-        E_pot.resize(N*N*N,0);
-        E_kin.resize(N*N*N,0);
-        cells.resize(box_N*box_N*box_N);
-        UniformRandomdouble random;
-        // Initialize the atoms in a simple cubic lattice and random direction velocities
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                for (int k = 0; k < N; k++) {
-                    Vec3 position(system_size * (0.125 + 0.75 * i / (N-1)),
-                                  system_size * (0.125 + 0.75 * j / (N-1)),
-                                  system_size * (0.125 + 0.75 * k / (N-1)));
-                    Vec3 velocity = unit_velocities[std::floor(6*random())]*std::sqrt(8*kB*T_init/Mass)*one_over_sqrt_pi;
-                    atoms.push_back(Atom(position, velocity));
-                    // Add the atom to the cell by index
-                    int index = 0, atom_index = 0;
-                    index += std::floor(position.getX() / box_L);
-                    index += std::floor(position.getY() / box_L) * box_N;
-                    index += std::floor(position.getZ() / box_L) * box_N * box_N;
-                    atom_index = i + j * N + k * N * N;
-                    cells[index].push_back(atom_index);
-                }
-            }
-        }
-    }
-     */
     // assignment operator
     System& operator=(const System& other) {
         if (this != &other) {
@@ -223,12 +169,12 @@ class System{
     inline std::vector<Atom> getAtoms() const { return atoms; }
     inline int getBoxN() const { return box_N; }
     inline std::vector<std::vector<int>> getCells() const { return cells; }
-    inline double getSystemSize() const { return system_size; }
-    inline double getPotentialEnergy() const {
+    inline float getSystemSize() const { return system_size; }
+    inline float getPotentialEnergy() const {
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
-    inline std::vector<double> getPotentialEnergies() const { return E_pot; }
-    inline void updatePotentialEnergies(const std::vector<double>& new_potentials) {
+    inline std::vector<float> getPotentialEnergies() const { return E_pot; }
+    inline void updatePotentialEnergies(const std::vector<float>& new_potentials) {
         	E_pot = new_potentials;
     }
     // I want to implement a function, that give me the indices of the neighboring cells
@@ -312,11 +258,11 @@ class System{
                       << atoms[i].getVelocity().getY() << " " << atoms[i].getVelocity().getZ() << std::endl;
         }
     }
-    inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const double& period) const {
+    inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) const {
         const Vec3 r = r1 - r2;
-        double x = r.getX();
-        double y = r.getY();
-        double z = r.getZ();
+        float x = r.getX();
+        float y = r.getY();
+        float z = r.getZ();
         while (x > period * 0.5) x -= period;
         while (x < -period * 0.5) x += period;
 
@@ -327,11 +273,11 @@ class System{
         while (z < -period * 0.5) z += period;
         return Vec3(x, y, z);
     }
-    inline Vec3 PeriodicPositionUpdate(const Vec3& position, const Vec3& velocity, const double& dt) const {
+    inline Vec3 PeriodicPositionUpdate(const Vec3& position, const Vec3& velocity, const float& dt) const {
         Vec3 new_position = position + velocity * dt;
-        double x = new_position.getX();
-        double y = new_position.getY();
-        double z = new_position.getZ();
+        float x = new_position.getX();
+        float y = new_position.getY();
+        float z = new_position.getZ();
         while (x < 0) x += system_size;
         while (x > system_size) x -= system_size;
         while (y < 0) y += system_size;
@@ -356,20 +302,14 @@ class System{
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
                     Vec3 r = ri - rj;
-                    double r2 = r.norm2();
+                    float r2 = r.norm2();
                     Vec3 accel = r*ComputeAccel(r2);
-                    double pot = LennardJones(r2);
+                    float pot = LennardJones(r2);
                     // Lennard Jones potential
                     E_pot[atom_i] += pot;
                     E_pot[atom_j] += pot;
                     accels[atom_i] += accel;
                     accels[atom_j] -= accel; // Newton's Third Law
-                    // Confining potential
-                    //E_pot[atom_i] += confiningPotential(ri, system_size);
-                    //E_pot[atom_j] += confiningPotential(rj, system_size);
-                    //accels[atom_i] += confiningAccel(ri, system_size);
-                    //accels[atom_j] += confiningAccel(rj, system_size);
-
                     }
                 }
             }
@@ -379,9 +319,9 @@ class System{
                 for (int atom_i : cell_atoms) {
                     for (int atom_j : neighbor_atoms) {
                         Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
-                        double r2 = r.norm2();
+                        float r2 = r.norm2();
                         Vec3 accel = r*ComputeAccel(r2);
-                        double pot = LennardJones(r2);
+                        float pot = LennardJones(r2);
                         accels[atom_i] += accel;
                         E_pot[atom_i] += pot;
                     }
@@ -389,7 +329,7 @@ class System{
             }
         }
     }
-    double computePotentialEnergy() {
+    float computePotentialEnergy() {
         std::fill(E_pot.begin(), E_pot.end(), 0);
         for (int cell = 0; cell < box_N * box_N * box_N; ++cell) {
             const std::vector<int>& cell_atoms = cells[cell];
@@ -401,8 +341,8 @@ class System{
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
                     Vec3 r = ri - rj;
-                    double r2 = r.norm2();
-                    double pot = LennardJones(r2);
+                    float r2 = r.norm2();
+                    float pot = LennardJones(r2);
                     // Lennard Jones potential
                     E_pot[atom_i] += pot;
                     E_pot[atom_j] += pot;
@@ -415,8 +355,8 @@ class System{
                 for (int atom_i : cell_atoms) {
                     for (int atom_j : neighbor_atoms) {
                         Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
-                        double r2 = r.norm2();
-                        double pot = LennardJones(r2);
+                        float r2 = r.norm2();
+                        float pot = LennardJones(r2);
                         E_pot[atom_i] += pot;
                     }
                 }
@@ -424,8 +364,8 @@ class System{
         }
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
-    double computePotentialSansAtomidx(const int &atom_idx) const{
-        std::vector<double> temp_E_pot = E_pot;
+    float computePotentialSansAtomidx(const int &atom_idx) const{
+        std::vector<float> temp_E_pot = E_pot;
         int cell = getCell(atoms[atom_idx].getPosition());
         const std::vector<int>& cell_atoms = cells[cell];
         const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
@@ -433,8 +373,8 @@ class System{
             if (atom_i != atom_idx) {
                 Vec3 ri = atoms[atom_i].getPosition();
                 Vec3 r = atoms[atom_idx].getPosition() - ri;
-                double r2 = r.norm2();
-                double pot = LennardJones(r2);
+                float r2 = r.norm2();
+                float pot = LennardJones(r2);
                 temp_E_pot[atom_i] -= pot;
             }
         }
@@ -443,15 +383,15 @@ class System{
             for (int atom_i : cell_atoms) {
                 for (int atom_j : neighbor_atoms) {
                     Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
-                    double r2 = r.norm2();
-                    double pot = LennardJones(r2);
+                    float r2 = r.norm2();
+                    float pot = LennardJones(r2);
                     temp_E_pot[atom_i] -= pot;
                 }
             }
         }
         return std::accumulate(temp_E_pot.begin(), temp_E_pot.end(), 0.0);
     }
-	inline void update_positions(double dt){
+	inline void update_positions(float dt){
 		for (int i = 0; i < N; i++) {
         	Vec3 position = atoms[i].getPosition();
             Vec3 velocity = atoms[i].getVelocity();
@@ -460,17 +400,18 @@ class System{
             atoms[i].setPosition(position);
     	}
     }
-    inline void update_velocities(double dt){
+    inline void update_velocities(float dt){
     	for (int i = 0; i < N; i++) {
         	Vec3 velocity = atoms[i].getVelocity();
             Vec3 accel = accels[i];
             velocity = velocity + accel * dt;
             atoms[i].setVelocity(velocity);
-            double v2 = velocity.norm2();
+            float v2 = velocity.norm2();
+			//kinetic energy in kB*K
             E_kin[i] = 0.5 * Mass * v2;
         }
     }
-    inline void update(double dt){
+    inline void update(float dt){
     	update_positions(dt);
         computeAccels();
         update_velocities(dt);
@@ -483,9 +424,9 @@ class System{
         return data;
     }
     /*
-    std::pair <std::vector<std::vector<Vec3>>,std::vector<std::array<double,2>>> run(int steps,double dt) {
+    std::pair <std::vector<std::vector<Vec3>>,std::vector<std::array<float,2>>> run(int steps,float dt) {
     	std::vector<std::vector<Vec3>> data(steps, std::vector<Vec3>(N, Vec3()));
-        std::vector<std::array<double,2>> energies(steps, std::array<double,2>());
+        std::vector<std::array<float,2>> energies(steps, std::array<float,2>());
         //calculation of v1/2
         computeAccels();
         update_velocities(dt/2);
@@ -513,11 +454,11 @@ class System{
         return std::make_pair(data,energies);
     }
      */
-    void run(int steps,double dt, char *filename, int resolution) {
+    void run(int steps,float dt, char *filename, int resolution) {
         std::ofstream file(filename);
         file << system_size << "\n" <<  N <<  "\n" << steps << "\n" << resolution << "\n";
     	std::vector<Vec3> data(N, Vec3());
-        std::array<double,2> energies{0,0};
+        std::array<float,2> energies{0,0};
         //calculation of v1/2
         computeAccels();
         update_velocities(dt/2);
@@ -525,7 +466,7 @@ class System{
         const int barWidth = 70;
     	for (int i = 0; i < steps; i++) {
             // print the progress every percent
-    	    if (i % (steps/100) == 0) {
+            if (i % (steps/100) == 0) {
                 std::cout << "[";
                 int pos = barWidth * i / steps;
                 for (int j = 0; j < barWidth; ++j) {

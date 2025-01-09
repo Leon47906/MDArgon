@@ -1,0 +1,19 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs
+/CppProperties.json
+/data.txt
+/verlet.x
+/verlet.exe
+/VanDerWaalsPressure.nb
+/test.lib
+/test.exp
+/test.exe
+/test.cu
+/potentialEnergies.txt
+/particles_animation.mp4
+/mc_energy.lib
+/mc_energy.exp
+/mc_energy.exe
