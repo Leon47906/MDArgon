@@ -1,12 +1,7 @@
 #include "verlet.hpp"
 #include <fstream>
 #include <chrono>
-static constexpr float kB = 1.38064852e-23;
-static constexpr float nm = 1e-9;//nanometer
-static constexpr float ns = 1e-9;//nanosecond
-static constexpr float fs = 1e-15;//femtosecond
-static constexpr float Sigma = 0.33916; //Sigma in nm
-static constexpr float Epsilon = 137.9; //Epsilon in kB*K
+
 
 class BoltzmannDistribution {
 	std::random_device rd;

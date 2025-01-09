@@ -13,12 +13,16 @@
 
 #ifndef VERLET_HPP
 #define VERLET_HPP
-#define M_PI 3.14159265358979323846
-#define M_2_SQRTPI 1.1283791670955125738961589
 
-static constexpr float shift = -0.016316891136;
-static constexpr float Mass = 39.948; //Mass in Dalton
-static constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
+constexpr float kB = 1.38064852e-23;
+constexpr float nm = 1e-9;//nanometer
+constexpr float ns = 1e-9;//nanosecond
+constexpr float fs = 1e-15;//femtosecond
+constexpr float Sigma = 0.33916; //Sigma in nm
+constexpr float Epsilon = 137.9; //Epsilon in kB*K
+constexpr float shift = -0.016316891136;
+constexpr float Mass = 39.948; //Mass in Dalton
+constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
 
 
 inline float LennardJones(float r2) {
@@ -456,7 +460,7 @@ class System{
      */
     void run(int steps,float dt, char *filename, int resolution) {
         std::ofstream file(filename);
-        file << system_size << "\n" <<  N <<  "\n" << steps << "\n" << resolution << "\n";
+        file << system_size * Sigma * nm << "\n" <<  N <<  "\n" << steps << "\n" << resolution << "\n";
     	std::vector<Vec3> data(N, Vec3());
         std::array<float,2> energies{0,0};
         //calculation of v1/2
@@ -479,11 +483,11 @@ class System{
             }
         	update(dt);
             data = getData();
-            energies[0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
-            energies[1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0);
+            energies[0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0) * Epsilon * kB;
+			energies[1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0) * Epsilon * kB;
             if (i % resolution == 0) {
                 for (int j = 0; j < N; j++) {
-                    file << data[j].getX() << " " << data[j].getY() << " " << data[j].getZ() << "\n";
+                    file << data[j].getX() * Sigma * nm << " " << data[j].getY() * Sigma * nm << " " << data[j].getZ() * Sigma * nm << "\n";
                 }
                 file << energies[0] << " " << energies[1] << std::endl;
             }
