@@ -28,7 +28,7 @@ std::vector<Vec3> cubicLattice(int N, float system_size) {
     int cube_root = static_cast<int>(std::ceil(std::cbrt(N)));
 
     // Calculate the lattice spacing
-    float lattice_spacing = system_size / (cube_root);
+    float lattice_spacing = system_size / (cube_root*2);
     if (lattice_spacing <= 0) {
         throw std::runtime_error("Lattice spacing must be greater than 0.");
     }
@@ -77,15 +77,9 @@ int main(int argc, char *argv[]) {
         velocities.resize(N, Vec3());
         positions = cubicLattice(N, system_size);
         UniformRandomFloat random;
-		BoltzmannDistribution boltzmann(T_init/Mass);
+		float v0 = std::sqrt(3 * T_init/ Epsilon);
         for (int i = 0; i < N; i++) {
-			velocities[i] = unit_velocities[std::floor(6 * random())] * boltzmann();
-        }
-		// remove net momentum
-		Vec3 sum_velocity = std::accumulate(velocities.begin(), velocities.end(), Vec3());
-		Vec3 mean_velocity = sum_velocity / N;
-        for (int i = 0; i < N; i++) {
-            velocities[i] -= mean_velocity;
+			velocities[i] = unit_velocities[std::floor(6 * random())] * v0;
         }
     }
     else if (argc == 1) {
