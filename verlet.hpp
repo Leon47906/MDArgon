@@ -18,6 +18,7 @@ constexpr float kB = 1.38064852e-23;
 constexpr float nm = 1e-9;//nanometer
 constexpr float ns = 1e-9;//nanosecond
 constexpr float fs = 1e-15;//femtosecond
+constexpr float Dalton = 1.66053906660e-27;//Dalton in kg
 constexpr float Sigma = 0.33916; //Sigma in nm
 constexpr float Epsilon = 137.9; //Epsilon in kB*K
 constexpr float shift = -0.016316891136;
@@ -28,7 +29,16 @@ constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
 inline float LennardJones(float r2) {
 	if (r2 > 6.25) return 0;
   	float r6 = r2*r2*r2;
-    return 4/r6*(1/r6 - 1)-shift;
+    return 4.0/r6*(1.0/r6 - 1.0)-shift;
+}
+
+inline float ComputeAccel(float r2) {
+    if (r2 > 6.25) return 0;
+    else {
+    	float r6 = r2*r2*r2;
+        float r_inv = 1/std::sqrt(r2);
+        return 24.0 * r_inv / Mass / r6 * (2.0/r6 - 1.0);
+    }
 }
 
 class UniformRandomFloat{
@@ -94,6 +104,10 @@ class Vec3{
     Vec3 Zero() const { return Vec3(0, 0, 0); }
 };
 
+inline float dot(const Vec3& v1, const Vec3& v2) {
+    return v1.getX() * v2.getX() + v1.getY() * v2.getY() + v1.getZ() * v2.getZ();
+}
+
 const static std::vector<Vec3> unit_velocities{Vec3(1,0,0), Vec3(0,1,0), Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,-1,0), Vec3(0,0,-1)};
 
 class Atom{
@@ -118,17 +132,6 @@ class Atom{
     void setVelocity(const Vec3& velocity) { this->velocity = velocity; }
 };
 
-inline float ComputeAccel(float r2) {
-    if (r2 > 6.25) return 0;
-    else {
-    	float r6 = r2*r2*r2;
-        float r_inv = 1/std::sqrt(r2);
-        return 24.0 * r_inv / r6 * (2.0/r6 - 1.0);
-    }
-}
-
-
-
 class System{
     float system_size, N;
     int box_N=std::ceil(system_size/2.5);
@@ -137,6 +140,7 @@ class System{
     std::vector<Atom> atoms;
     std::vector<Vec3> accels;
     std::vector<float> E_pot, E_kin;
+    std::vector<float> intermol_forces;
     public:
     System(float _system_size, std::vector<Vec3> _positions, std::vector<Vec3> _velocities) : system_size(_system_size), N(_positions.size()) {
         accels.resize(N, Vec3());

@@ -71,13 +71,13 @@ int main(int argc, char *argv[]) {
 		T_init = atof(argv[3]) / Epsilon;
         steps = atoi(argv[4]);
 		// time step from fs to reduced units
-        dt = atof(argv[5])*0.000463;
+        dt = atof(argv[5])*fs/std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB));
         resolution = atof(argv[6]);
         positions.resize(N, Vec3());
         velocities.resize(N, Vec3());
         positions = cubicLattice(N, system_size);
         UniformRandomFloat random;
-		BoltzmannDistribution boltzmann(T_init);
+		BoltzmannDistribution boltzmann(T_init/Mass);
         for (int i = 0; i < N; i++) {
 			velocities[i] = unit_velocities[std::floor(6 * random())] * boltzmann();
         }
