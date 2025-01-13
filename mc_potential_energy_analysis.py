@@ -16,8 +16,8 @@ def energies(filename):
     system_size = float(f.readline())
     N = int(f.readline())
     sweeps = int(f.readline())
-    resolution = int(f.readline())
-    sweeps = sweeps//resolution
+    seed = int(f.readline())
+    sweeps = sweeps
     e_pot = np.zeros(sweeps)
     for idx, line in enumerate(f):
         data = line.split()
@@ -102,7 +102,7 @@ def plot_means(data, resolution=1, correlation_time=1, filename="means.png"):
     plt.figure(figsize=(8, 6))
     plt.errorbar(resolution*np.arange(plot_length), means, yerr=3*errors, fmt='-', color='blue', ecolor='red', capsize=5)
     plt.xlabel("Sweeps", fontsize=14)
-    plt.ylabel("Mean Potential Energy (kB) per particle", fontsize=14)
+    plt.ylabel(r"Mean Potential Energy per particle in $\epsilon$", fontsize=14)
     plt.title("Mean Potential Energy vs Sweeps", fontsize=16)
     plt.grid(True, which="both", linestyle="--", linewidth=0.5)
     plt.savefig(filename, dpi=300)

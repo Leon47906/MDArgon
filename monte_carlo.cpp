@@ -203,5 +203,14 @@ int main(int argc, char *argv[]) {
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<float> elapsed_seconds = stop-start;
     std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
+    std::cout << "Energy Data written to MCdata.txt\n";
+    // write the final positions to a file
+    std::ofstream initial_positions("initial_positions.txt");
+    for (int i = 0; i < N; i++) {
+        Vec3 position = atom_system.getAtom(i).getPosition();
+        initial_positions << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
+    }
+    initial_positions.close();
+    std::cout << "Initial positions written to initial_positions.txt\n";
     return 0;
 }

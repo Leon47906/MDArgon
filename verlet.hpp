@@ -341,9 +341,20 @@ class System{
     }
     float computePotentialEnergy() {
         std::fill(E_pot.begin(), E_pot.end(), 0);
+        for (int i = 0; i < N; i++) {
+            for (int j = i + 1; j < N; j++) {
+                Vec3 r = PeriodicDifferece(atoms[i].getPosition(), atoms[j].getPosition(), system_size);
+                float r2 = r.norm2();
+                float pot = LennardJones(r2);
+                E_pot[i] += pot;
+            }
+        }
+        /*
         for (int cell = 0; cell < box_N * box_N * box_N; ++cell) {
             const std::vector<int>& cell_atoms = cells[cell];
             const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
+
+
             // Compute interactions within the same cell
             for (int atom_i : cell_atoms) {
                 for (int atom_j : cell_atoms) {
@@ -366,11 +377,14 @@ class System{
                         Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
                         float r2 = r.norm2();
                         float pot = LennardJones(r2);
-                        E_pot[atom_i] += pot;
+                        E_pot[atom_i] += pot/2;
                     }
                 }
             }
+
+
         }
+         */
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
 	inline void update_positions(float dt){
