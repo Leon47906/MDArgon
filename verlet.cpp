@@ -81,15 +81,26 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < N; i++) {
 			velocities[i] = v0 * unit_velocities[std::floor(6 * random())];
         }
+        // print the distance which one particle with velocity v0 travels in one time step
+        std::cout << "Distance: " << v0 * dt << std::endl;
+        /*
+        Vec3 v_com = Vec3();
+        for (int i = 0; i < N; i++) {
+            v_com += velocities[i]/N;
+        }
+        for (int i = 0; i < N; i++) {
+            velocities[i] -= v_com;
+        }
+         */
     }
     else if (argc == 2) {
         system_size = 4;
         N = 2;
-        steps = 220000;
+        steps = 1000000;
         dt = 1*fs/std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB));
         resolution = 500;
-        positions = {Vec3(1,1,1), Vec3(1,3,1)};
-        velocities = {Vec3(0,0,0), Vec3(0,-1,0)};
+        positions = {Vec3(1,1,1), Vec3(1,2,1),Vec3(1,3,1)};
+        velocities = {Vec3(0,0,0), Vec3(0,0,0),Vec3()};
     }
     else if (argc == 1) {
         system_size = 2;

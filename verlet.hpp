@@ -38,7 +38,7 @@ inline float ComputeAccel(float r2) {
     	float r6 = r2*r2*r2;
         float r8 = r6*r2;
         //float r_inv = 1/std::sqrt(r2);
-        return 24.0 / Mass / r8 * (2.0/r6 - 1.0);
+        return 24.0 / r8 * (2.0/r6 - 1.0);
     }
 }
 
@@ -318,7 +318,6 @@ class System{
                     float pot = LennardJones(r2);
                     // Lennard Jones potential
                     E_pot[atom_i] += pot;
-                    E_pot[atom_j] += pot;
                     accels[atom_i] += accel;
                     accels[atom_j] -= accel; // Newton's Third Law
                     }
@@ -334,7 +333,7 @@ class System{
                         Vec3 accel = r*ComputeAccel(r2);
                         float pot = LennardJones(r2);
                         accels[atom_i] += accel;
-                        E_pot[atom_i] += pot;
+                        E_pot[atom_i] += pot/2;
                     }
                 }
             }
@@ -356,7 +355,6 @@ class System{
                     float pot = LennardJones(r2);
                     // Lennard Jones potential
                     E_pot[atom_i] += pot;
-                    E_pot[atom_j] += pot;
                     }
                 }
             }
@@ -391,8 +389,7 @@ class System{
             velocity = velocity + accel * dt;
             atoms[i].setVelocity(velocity);
             float v2 = velocity.norm2();
-			//kinetic energy in kB*K
-            E_kin[i] = 0.5 * Mass * v2;
+            E_kin[i] = 0.5 * v2;
         }
     }
     inline void update(float dt){
@@ -407,37 +404,6 @@ class System{
         }
         return data;
     }
-    /*
-    std::pair <std::vector<std::vector<Vec3>>,std::vector<std::array<float,2>>> run(int steps,float dt) {
-    	std::vector<std::vector<Vec3>> data(steps, std::vector<Vec3>(N, Vec3()));
-        std::vector<std::array<float,2>> energies(steps, std::array<float,2>());
-        //calculation of v1/2
-        computeAccels();
-        update_velocities(dt/2);
-        //simulation
-        const int barWidth = 70;
-    	for (int i = 0; i < steps; i++) {
-            // print the progress every percent
-    	    if (i % (steps/100) == 0) {
-                std::cout << "[";
-                int pos = barWidth * i / steps;
-                for (int j = 0; j < barWidth; ++j) {
-                    if (j < pos) std::cout << "=";
-                    else if (j == pos) std::cout << ">";
-                    else std::cout << " ";
-                }
-                std::cout << "] " << int(i * 100.0 / steps) << " %\r";
-                std::cout.flush();
-            }
-        	update(dt);
-            data[i] = getData();
-            energies[i][0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
-            energies[i][1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0);
-        }
-        std::cout << "[" << std::string(barWidth, '=') << "] 100%\n";
-        return std::make_pair(data,energies);
-    }
-     */
     void run(int steps, float dt, char *filename, int resolution) {
         std::ofstream file(filename);
         file << system_size * Sigma * nm << "\n" << T_init * Epsilon << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n";
@@ -463,8 +429,8 @@ class System{
             }
         	update(dt);
             data = getData();
-            energies[0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0) * Epsilon * kB;
-			energies[1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0) * Epsilon * kB;
+            energies[0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
+			energies[1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0);
             if (i % resolution == 0) {
                 for (int j = 0; j < N; j++) {
                     file << data[j].getX() * Sigma * nm << " " << data[j].getY() * Sigma * nm << " " << data[j].getZ() * Sigma * nm << "\n";

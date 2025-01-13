@@ -61,6 +61,9 @@ def plot_data(filename):
 
 def plot_energies(filename):
     kB = 1.38064852e-23
+    Mass = 39.948*1.66053906660e-27
+    Sigma = 0.33916e-9
+    Epsilon = 137.9*kB
     # Load data
     f = open(filename, 'r')
     # read from first line the number of particles
@@ -77,25 +80,29 @@ def plot_energies(filename):
         idx = idx % (N+1)
         data = line.split()
         if len(data) == 2:
-            e_int[step] = float(data[0])/kB
-            e_kin[step] = float(data[1])/kB
+            e_int[step] = float(data[0])/N
+            e_kin[step] = float(data[1])/N
         else:
             continue
     f.close()
+    # Create the time axis with correct scaling to fs
+    # std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB))
+    dt = 0.1*np.sqrt(Mass*Sigma**2/Epsilon)/10e-15
+    time = np.linspace(0, steps*dt, steps)
     # Create plot of energies seperately
     fig, axs = plt.subplots(1,3)
     fig.set_size_inches(15, 5)
-    axs[0].plot(e_int, label='Interaction energy')
+    axs[0].plot(time, e_int, label='Interaction energy')
     axs[0].set_xlabel('Time in fs')
-    axs[0].set_ylabel('Interaction energy in kB')
+    axs[0].set_ylabel('Interaction energy per particle in $\epsilon$')
     axs[0].legend()
-    axs[1].plot(e_kin, label='Kinetic energy')
+    axs[1].plot(time, e_kin, label='Kinetic energy')
     axs[1].set_xlabel('Time in fs')
-    axs[1].set_ylabel('Kinetic energy in kB')
+    axs[1].set_ylabel('Kinetic energy per particle in $\epsilon$')
     axs[1].legend()
-    axs[2].plot(e_int+e_kin, label='Total energy')
+    axs[2].plot(time, e_int+e_kin, label='Total energy')
     axs[2].set_xlabel('Time in fs')
-    axs[2].set_ylabel('Total energy in kB')
+    axs[2].set_ylabel('Total energy per particle in $\epsilon$')
     plt.savefig('energies.png')
     plt.close()
     print(f"Plot saved as 'energies.png")
@@ -104,5 +111,5 @@ def plot_energies(filename):
 if __name__ == '__main__':
     #filename = 'MCdata.txt'
     filename = 'data.txt'
-    plot_data(filename)
+    #plot_data(filename)
     plot_energies(filename)
