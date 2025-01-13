@@ -36,8 +36,9 @@ inline float ComputeAccel(float r2) {
     if (r2 > 6.25) return 0;
     else {
     	float r6 = r2*r2*r2;
-        float r_inv = 1/std::sqrt(r2);
-        return 24.0 * r_inv / Mass / r6 * (2.0/r6 - 1.0);
+        float r8 = r6*r2;
+        //float r_inv = 1/std::sqrt(r2);
+        return 24.0 / Mass / r8 * (2.0/r6 - 1.0);
     }
 }
 
@@ -269,7 +270,7 @@ class System{
         }
     }
     inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) const {
-        const Vec3 r = r1 - r2;
+        const Vec3 r = r2 - r1;
         float x = r.getX();
         float y = r.getY();
         float z = r.getZ();
@@ -311,7 +312,7 @@ class System{
                   	if (atom_i < atom_j) {
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
-                    Vec3 r = ri - rj;
+                    Vec3 r = rj - ri;
                     float r2 = r.norm2();
                     Vec3 accel = r*ComputeAccel(r2);
                     float pot = LennardJones(r2);
@@ -350,7 +351,7 @@ class System{
                   	if (atom_i < atom_j) {
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
-                    Vec3 r = ri - rj;
+                    Vec3 r = rj - ri;
                     float r2 = r.norm2();
                     float pot = LennardJones(r2);
                     // Lennard Jones potential
@@ -373,33 +374,6 @@ class System{
             }
         }
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
-    }
-    float computePotentialSansAtomidx(const int &atom_idx) const{
-        std::vector<float> temp_E_pot = E_pot;
-        int cell = getCell(atoms[atom_idx].getPosition());
-        const std::vector<int>& cell_atoms = cells[cell];
-        const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
-        for (int atom_i : cell_atoms) {
-            if (atom_i != atom_idx) {
-                Vec3 ri = atoms[atom_i].getPosition();
-                Vec3 r = atoms[atom_idx].getPosition() - ri;
-                float r2 = r.norm2();
-                float pot = LennardJones(r2);
-                temp_E_pot[atom_i] -= pot;
-            }
-        }
-        for (int neighbor_cell : neighboring_cells) {
-            const std::vector<int>& neighbor_atoms = cells[neighbor_cell];
-            for (int atom_i : cell_atoms) {
-                for (int atom_j : neighbor_atoms) {
-                    Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
-                    float r2 = r.norm2();
-                    float pot = LennardJones(r2);
-                    temp_E_pot[atom_i] -= pot;
-                }
-            }
-        }
-        return std::accumulate(temp_E_pot.begin(), temp_E_pot.end(), 0.0);
     }
 	inline void update_positions(float dt){
 		for (int i = 0; i < N; i++) {

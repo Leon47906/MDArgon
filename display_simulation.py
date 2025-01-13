@@ -65,6 +65,7 @@ def plot_energies(filename):
     f = open(filename, 'r')
     # read from first line the number of particles
     system_size = float(f.readline())
+    temperature = float(f.readline())
     N = int(f.readline())
     steps = int(f.readline())
     resolution = int(f.readline())
@@ -81,8 +82,6 @@ def plot_energies(filename):
         else:
             continue
     f.close()
-    e_int = e_int[100:]
-    e_kin = e_kin[100:]
     # Create plot of energies seperately
     fig, axs = plt.subplots(1,3)
     fig.set_size_inches(15, 5)
@@ -105,5 +104,5 @@ def plot_energies(filename):
 if __name__ == '__main__':
     #filename = 'MCdata.txt'
     filename = 'data.txt'
-    plot_data(filename)
-    #plot_energies(filename)
+    #plot_data(filename)
+    plot_energies(filename)
