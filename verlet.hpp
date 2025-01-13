@@ -270,7 +270,7 @@ class System{
         }
     }
     inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) const {
-        const Vec3 r = r2 - r1;
+        const Vec3 r = r1 - r2;
         float x = r.getX();
         float y = r.getY();
         float z = r.getZ();
@@ -312,7 +312,7 @@ class System{
                   	if (atom_i < atom_j) {
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
-                    Vec3 r = rj - ri;
+                    Vec3 r = ri - rj;
                     float r2 = r.norm2();
                     Vec3 accel = r*ComputeAccel(r2);
                     float pot = LennardJones(r2);
@@ -351,7 +351,7 @@ class System{
                   	if (atom_i < atom_j) {
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
-                    Vec3 r = rj - ri;
+                    Vec3 r = ri - rj;
                     float r2 = r.norm2();
                     float pot = LennardJones(r2);
                     // Lennard Jones potential

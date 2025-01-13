@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
         velocities.resize(N, Vec3());
         positions = cubicLattice(N, system_size);
         UniformRandomFloat random(1234);
-		float v0 = std::sqrt(3 * T_init * Epsilon / Mass);
+		float v0 = std::sqrt(3 * T_init);
         for (int i = 0; i < N; i++) {
 			velocities[i] = v0 * unit_velocities[std::floor(6 * random())];
         }
@@ -85,11 +85,11 @@ int main(int argc, char *argv[]) {
     else if (argc == 2) {
         system_size = 4;
         N = 2;
-        steps = 250000;
+        steps = 220000;
         dt = 1*fs/std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB));
         resolution = 500;
         positions = {Vec3(1,1,1), Vec3(1,3,1)};
-        velocities = {Vec3(0,0,0), Vec3(0,0,0)};
+        velocities = {Vec3(0,0,0), Vec3(0,-1,0)};
     }
     else if (argc == 1) {
         system_size = 2;
