@@ -6,97 +6,129 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
+#include <omp.h>
+#include "verlet.hpp"
 
-// Function to calculate pairs in 3D and normalize by the number of particles
-#include <thread>
-#include <mutex>
+// Periodic boundary conditions
+inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const double& period) {
+        const Vec3 r = r1 - r2;
+        double x = r.getX();
+        double y = r.getY();
+        double z = r.getZ();
+        while (x > period * 0.5) x -= period;
+        while (x < -period * 0.5) x += period;
+
+        while (y > period * 0.5) y -= period;
+        while (y < -period * 0.5) y += period;
+
+        while (z > period * 0.5) z -= period;
+        while (z < -period * 0.5) z += period;
+        return Vec3(x, y, z);
+}
 
 // Function to calculate pairs in 3D with multithreading support
-double calculateNormalizedPairDensity(
-    const std::vector<std::vector<std::tuple<double, double, double>>>& particles,
-    double radius, double ringsize, size_t steps, size_t N, double system_size) {
+std::vector<double> calculateNormalizedPairDensity(
+    const std::vector<std::vector<std::tuple<double, double, double>>>& particles, double ringsize, size_t steps, size_t N, double system_size, double system_limit) {
+    
+    size_t num_rings = system_limit / ringsize;
+    std::vector<double> counts(num_rings, 0);
+    std::vector<std::vector<double>> norm_counts;
+    int num_rec = system_limit / system_size -1;
 
-    double radiusSquared = radius * radius;
-    double maxRadiusSquared = (radius + ringsize) * (radius + ringsize);
-    std::vector<double> pairList;
+    std::cout << "num_rings: " << num_rings << "\n";
+    std::cout << "[";
 
-    size_t num_repeats = std::ceil(radius / system_size); // Number of box repetitions in each dimension
-    size_t num_threads = std::thread::hardware_concurrency(); // Number of available threads
-    std::mutex mtx; // Mutex for thread-safe access to shared resources
-
+    // Parallelizing over the steps
+    #pragma omp parallel for
     for (size_t step = 0; step < steps; ++step) {
-        size_t totalPairCount = 0;
+        for (size_t i = 0; i < N; ++i) {
+            for (size_t j = 0; j < N; ++j) {
+                double x, y, z = std::get<0>(particles[step][i]);
+                double x2, y2, z2 = std::get<0>(particles[step][j]);
+                Vec3 dr1 = Vec3(x, y, z);
+                Vec3 dr2 = Vec3(x2, y2, z2);
 
-        // Lambda function for thread work
-        auto worker = [&](size_t start, size_t end) {
-            size_t threadPairCount = 0;
-            for (size_t i = start; i < end; ++i) {
-                for (size_t j = i + 1; j < N; ++j) {
-                    // Compute the minimum distance considering periodic boundaries
-                    double dx = std::get<0>(particles[step][i]) - std::get<0>(particles[step][j]);
-                    double dy = std::get<1>(particles[step][i]) - std::get<1>(particles[step][j]);
-                    double dz = std::get<2>(particles[step][i]) - std::get<2>(particles[step][j]);
-
-                    // Check all periodic replicas
-                    for (int x_shift = -num_repeats; x_shift <= num_repeats; ++x_shift) {
-                        for (int y_shift = -num_repeats; y_shift <= num_repeats; ++y_shift) {
-                            for (int z_shift = -num_repeats; z_shift <= num_repeats; ++z_shift) {
-                                double shifted_dx = dx + x_shift * system_size;
-                                double shifted_dy = dy + y_shift * system_size;
-                                double shifted_dz = dz + z_shift * system_size;
-                                double distanceSquared = shifted_dx * shifted_dx +
-                                                         shifted_dy * shifted_dy +
-                                                         shifted_dz * shifted_dz;
-
-                                // Count pairs within the radius range
-                                if (radiusSquared < distanceSquared && distanceSquared < maxRadiusSquared) {
-                                    ++threadPairCount;
-                                }
+                // Calculate the distance between the particles for periodic boundary conditions
+                /**/
+                for (int i = -num_rec; i <= num_rec; ++i) {
+                    for (int j = -num_rec; j <= num_rec; ++j) {
+                        for (int k = -num_rec; k <= num_rec; ++k) {
+                            Vec3 dr = dr1 - dr2 + Vec3(i*system_size, j*system_size, k*system_size);
+                            double distanceSquared = dr.norm2();
+                            double distance = std::sqrt(distanceSquared);
+                            size_t ring = std::floor(distance/ringsize);
+                            if (ring < num_rings) {
+                                counts[ring]++;
                             }
                         }
                     }
                 }
+                /*
+                            
+                // Calculate the distance between the particles
+                double distanceSquared = PeriodicDifferece(dr1, dr2, system_size).norm2();
+                double distance = std::sqrt(distanceSquared);
+                size_t ring = std::floor(distance/ringsize);
+                if (ring < num_rings) {
+                    counts[ring]++;
+                }
+                */
             }
-
-            // Safely update the total pair count
-            std::lock_guard<std::mutex> lock(mtx);
-            totalPairCount += threadPairCount;
-        };
-
-        // Divide work among threads
-        std::vector<std::thread> threads;
-        size_t chunkSize = N / num_threads;
-
-        for (size_t t = 0; t < num_threads; ++t) {
-            size_t start = t * chunkSize;
-            size_t end = (t == num_threads - 1) ? N : start + chunkSize;
-            threads.emplace_back(worker, start, end);
         }
 
-        // Wait for all threads to finish
-        for (auto& thread : threads) {
-            thread.join();
+        // After finishing the work for this step, accumulate the local counts into global counts
+        for (size_t i = 0; i < num_rings; ++i) {
+            counts[i] = counts[i]/N/*(N*4/3*M_PI*(std::pow((i+1), 3) - std::pow(i, 3)))*/;
         }
 
-        // Normalize the pair count and add to the pair list
-        pairList.push_back(2.0 * static_cast<double>(totalPairCount) / N);
+        norm_counts.push_back(counts);
+
+        // Print progress
+        if (steps > 99) {
+            if (step % (steps / 100) == 0) {
+                std::cout << "=";
+            }
+        } else {
+            std::cout << "=";
+        }
     }
+
+    std::cout << "]\n";
 
     // Calculate the average normalized pair density
-    double average = 0.0;
-    for (double pair : pairList) {
-        average += pair;
+    std::cout << "[";
+    std::vector<double> results(num_rings, 0);
+    for (size_t i = 0; i < num_rings; ++i) {
+        double sum = 0;
+        for (size_t j = 0; j < steps; ++j) {
+            sum += norm_counts[j][i];
+        }
+        results[i] = sum/steps;
+        if (num_rings > 99) {
+            if (i % (num_rings / 100) == 0) {
+                std::cout << "=";
+            }
+        } else {
+            std::cout << "=";
+        }
     }
-    return average / pairList.size();
+    std::cout << "]" << "\n";
+    
+    return results;
 }
 
 
 int main(int argc, char* argv[]) {
-    // Read the ring size
-    double ringsize = 1e-9;
+    // Read max_ring from command line
+    int max_ring;
     if (argc == 2) {
-        ringsize = std::stod(argv[1]);
+        max_ring = std::stoi(argv[1]);    
+    } else {
+        std::cout << "Usage: " << argv[0] << " [max_ring]\n";
+        return -1;
     }
+    
 
     // Open the input file
     std::ifstream inputFile("data.txt");
@@ -106,7 +138,8 @@ int main(int argc, char* argv[]) {
     }
 
     // Parse header lines
-    size_t system_size, N, steps, res;
+    size_t N, steps, res;
+    double system_size;
     std::string line;
     for (int i = 0; i < 4; ++i) {
         if (!std::getline(inputFile, line)) {
@@ -130,8 +163,8 @@ int main(int argc, char* argv[]) {
     std::cout << "res: " << res << "\n";
 
     // Read particle data
-    std::vector<std::vector<std::tuple<double, double, double>>> particles(steps, std::vector<std::tuple<double, double, double>>(N));
-    for (size_t step = 0; step < steps; ++step) {
+    std::vector<std::vector<std::tuple<double, double, double>>> particles(steps/res, std::vector<std::tuple<double, double, double>>(N));
+    for (size_t step = 0; step < steps/res; ++step) {
         for (size_t i = 0; i <= N; ++i) {
             if (i != N) {
                 if (!std::getline(inputFile, line)) {
@@ -156,19 +189,18 @@ int main(int argc, char* argv[]) {
     inputFile.close();
 
     // Calculate normalized pair density for all radii
-    std::cout << "[";
-    std::vector<double> results;
-    double system_limit = system_size;
-    std::cout << int(ringsize/ringsize);
-    for (double radius = 0.0; radius < system_limit; radius += ringsize) {
-        double result = calculateNormalizedPairDensity(particles, radius, ringsize, steps, N, system_size);
-        results.push_back(result);
-        if (int(radius/ringsize)== 0) {
-            std::cout << "=";
-        }
-    }
-    std::cout << "] 100%\n";
+    int cube_root = static_cast<int>(std::ceil(std::cbrt(N)));
+    int cube_number = cube_root * cube_root * cube_root;
 
+    // Calculate the lattice spacing
+    double ringsize = system_size / (cube_root*20);
+
+    std::cout << "ringsize: " << ringsize << ", ";
+    std::vector<double> results;
+    double system_limit = max_ring*system_size/2;
+    std::cout << "system_limit: " << system_limit << ", ";
+    results = calculateNormalizedPairDensity(particles, ringsize, steps/res, N, system_size, system_limit);
+        
     // Write results to a file
     std::ofstream outputFile("pair_results.txt");
     if (!outputFile) {
@@ -176,7 +208,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     for (double result : results) {
-        outputFile << std::fixed << std::setprecision(6) << result << "\n";
+        outputFile << std::fixed << std::setprecision(9) << result << "\n";
     }
     outputFile.close();
 
