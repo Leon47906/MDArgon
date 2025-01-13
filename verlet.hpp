@@ -466,7 +466,7 @@ class System{
      */
     void run(int steps, float dt, char *filename, int resolution) {
         std::ofstream file(filename);
-        file << system_size * Sigma * nm << "\n" << T_init << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n";
+        file << system_size * Sigma * nm << "\n" << T_init * Epsilon << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n";
     	std::vector<Vec3> data(N, Vec3());
         std::array<float,2> energies{0,0};
         //calculation of v1/2
