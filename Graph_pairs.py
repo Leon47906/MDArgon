@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-def plot_pair_density(file_path, ringsize):
+def plot_pair_density(file_path, parameters):
     """
     Liest die Ergebnisse aus einer Datei und erstellt einen Graphen der paarweisen Dichte.
     
@@ -9,11 +9,18 @@ def plot_pair_density(file_path, ringsize):
     """
     try:
         # Ergebnisse aus der Datei lesen
+        with open(parameters, 'r') as file:
+            system_size = file.readline().strip()
+            N = file.readline().strip()
+            steps = file.readline().strip()
+            temp = file.readline().strip()
+            ringsize = float(file.readline().strip())
+        
         with open(file_path, 'r') as file:
             results = [float(line.strip()) for line in file.readlines()]
         
         # X-Achse (Radien basierend auf der Ringgröße berechnen)
-        radii = [i * ringsize for i in range(len(results))]
+        radii = [ringsize*i for i in range(len(results))]
         
         # Mittelwert der paarweisen Dichte berechnen
         mean_density = sum(results) / len(results)
@@ -22,13 +29,13 @@ def plot_pair_density(file_path, ringsize):
         plt.figure(figsize=(10, 6))
         plt.plot(radii, results, linestyle='-', color='b', label='Paarweise Dichte')
         plt.plot(radii, [mean_density for i in range(len(results))], linestyle='--', color='r', label='Mittelwert')
-        plt.title("Paarweise Dichte gegen Radius")
-        plt.xlabel("Radius (m)")
-        plt.ylabel("Normierte Paar-Dichte")
+        plt.title("Radiale Verteilungsfuntion für Systemgröße: " + system_size + " nm, Teilchenanzahl: " + N + "\n" + "Zeitschritte: " + steps + ", Temperatur: " + temp + " K")
+        plt.xlabel("r/sigma")
+        plt.ylabel("g(r)")
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend()
         plt.tight_layout()
-        
+        plt.savefig("pair_density.png")
         # Graph anzeigen
         plt.show()
     
@@ -39,6 +46,6 @@ def plot_pair_density(file_path, ringsize):
 
 # Beispielaufruf
 if __name__ == "__main__":
-    file_path = "pair_results.txt"
-    ringsize = 1e-10  # Muss mit dem Ringgrößenparameter im C++-Code übereinstimmen
-    plot_pair_density(file_path, ringsize)
+    filename_1 = "pair_results.txt"
+    filename_2 = "parameters.txt"
+    plot_pair_density(filename_1, filename_2)
