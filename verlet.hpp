@@ -47,6 +47,7 @@ class UniformRandomFloat{
     std::uniform_real_distribution<float> dis;
     public:
     UniformRandomFloat() : gen(rd()), dis(0, 1) {}
+    UniformRandomFloat(const int& seed) : gen(seed), dis(0, 1) {}
     float operator()() {
         return dis(gen);
     }
@@ -140,9 +141,10 @@ class System{
     std::vector<Atom> atoms;
     std::vector<Vec3> accels;
     std::vector<float> E_pot, E_kin;
-    std::vector<float> intermol_forces;
+    float T_init;
     public:
-    System(float _system_size, std::vector<Vec3> _positions, std::vector<Vec3> _velocities) : system_size(_system_size), N(_positions.size()) {
+    System(float _system_size, std::vector<Vec3> _positions, std::vector<Vec3> _velocities, float _T_init) : system_size(_system_size), N(_positions.size()),
+      T_init(_T_init) {
         accels.resize(N, Vec3());
         E_pot.resize(N,0);
         E_kin.resize(N,0);
@@ -462,9 +464,9 @@ class System{
         return std::make_pair(data,energies);
     }
      */
-    void run(int steps,float dt, char *filename, int resolution) {
+    void run(int steps, float dt, char *filename, int resolution) {
         std::ofstream file(filename);
-        file << system_size * Sigma * nm << "\n" <<  N <<  "\n" << steps << "\n" << resolution << "\n";
+        file << system_size * Sigma * nm << "\n" << T_init << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n";
     	std::vector<Vec3> data(N, Vec3());
         std::array<float,2> energies{0,0};
         //calculation of v1/2

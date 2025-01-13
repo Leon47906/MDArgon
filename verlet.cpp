@@ -15,7 +15,7 @@ public:
 };
 
 std::vector<Vec3> cubicLattice(int N, float system_size) {
-    std::vector<Vec3> positions;
+    std::vector<Vec3> positions(N, Vec3());
 
     if (N <= 0) {
         throw std::invalid_argument("Number of atoms (N) must be greater than 0.");
@@ -28,7 +28,7 @@ std::vector<Vec3> cubicLattice(int N, float system_size) {
     int cube_root = static_cast<int>(std::ceil(std::cbrt(N)));
 
     // Calculate the lattice spacing
-    float lattice_spacing = system_size / (cube_root*2);
+    float lattice_spacing = system_size / (cube_root);
     if (lattice_spacing <= 0) {
         throw std::runtime_error("Lattice spacing must be greater than 0.");
     }
@@ -45,7 +45,7 @@ std::vector<Vec3> cubicLattice(int N, float system_size) {
                 float x = start_position + i * lattice_spacing;
                 float y = start_position + j * lattice_spacing;
                 float z = start_position + k * lattice_spacing;
-                positions.emplace_back(x, y, z);
+                positions[count] = Vec3(x, y, z);
                 count++;
             }
         }
@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     char filename[]= "data.txt";
-    System atom_system(system_size, positions, velocities);
+    System atom_system(system_size, positions, velocities, T_init);
     //start time measurement
    	auto start = std::chrono::high_resolution_clock::now();
     // run the simulation

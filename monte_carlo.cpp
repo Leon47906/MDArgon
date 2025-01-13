@@ -1,9 +1,8 @@
 #include "verlet.hpp"
 #include <chrono>
 #include <fstream>
-#include <omp.h>
 
-std::array<double, 100> polarangles, azimuthalangles;
+std::array<float, 100> polarangles, azimuthalangles;
 std::array<Vec3, 10000> vs;
 
 void initialize_vs() {
@@ -20,27 +19,27 @@ void initialize_vs() {
     }
 }
 
-std::vector<Vec3> randomDist(int N, double system_size,UniformRandomDouble *rd_ptr) {
+std::vector<Vec3> randomDist(int N, float system_size,UniformRandomFloat *rd_ptr) {
     if (N <= 0) {
         throw std::invalid_argument("Number of atoms (N) must be greater than 0.");
     }
     if (system_size <= 0) {
         throw std::invalid_argument("System size must be greater than 0.");
     }
-    UniformRandomDouble &rd = *rd_ptr;
+    UniformRandomFloat &rd = *rd_ptr;
     std::vector<Vec3> positions(N, Vec3());
     for (int i = 0; i < N; i++) {
-        const double x = system_size * rd();
-        const double y = system_size * rd();
-        const double z = system_size * rd();
+        const float x = system_size * rd();
+        const float y = system_size * rd();
+        const float z = system_size * rd();
         positions[i] = Vec3(x, y, z);
     }
     return positions;
 }
 
-std::vector<Vec3> cubicLattice(int N, double system_size) {
-    std::vector<Vec3> positions;
-
+std::vector<Vec3> cubicLattice(int N, float system_size, UniformRandomFloat *rd_ptr) {
+    std::vector<Vec3> positions(N, Vec3());
+	UniformRandomFloat &rd = *rd_ptr;
     if (N <= 0) {
         throw std::invalid_argument("Number of atoms (N) must be greater than 0.");
     }
@@ -53,24 +52,24 @@ std::vector<Vec3> cubicLattice(int N, double system_size) {
     int cube_number = cube_root * cube_root * cube_root;
 
     // Calculate the lattice spacing
-    double lattice_spacing = system_size / (cube_root);
+    float lattice_spacing = system_size / (cube_root);
     if (lattice_spacing <= 0) {
         throw std::runtime_error("Lattice spacing must be greater than 0.");
     }
 
     // Calculate the starting position for the lattice
-    double center = system_size / 2.0;
-    double start_position = center - (lattice_spacing * (cube_root - 1) / 2);
+    float center = system_size / 2.0;
+    float start_position = center - (lattice_spacing * (cube_root - 1) / 2);
 
     // Generate positions on a cubic lattice
     int count = 0;
     for (int i = 0; i < cube_root && count < N; ++i) {
         for (int j = 0; j < cube_root && count < N; ++j) {
             for (int k = 0; k < cube_root && count < N; ++k) {
-                double x = start_position + i * lattice_spacing;
-                double y = start_position + j * lattice_spacing;
-                double z = start_position + k * lattice_spacing;
-                positions.emplace_back(x, y, z);
+                float x = start_position + (i + (1-2*rd())/4) * lattice_spacing;
+                float y = start_position + (j + (1-2*rd())/4) * lattice_spacing;
+                float z = start_position + (k + (1-2*rd())/4) * lattice_spacing;
+                positions[count] = Vec3(x, y, z);
                 count++;
             }
         }
@@ -79,13 +78,13 @@ std::vector<Vec3> cubicLattice(int N, double system_size) {
 }
 
 
-std::tuple<double, std::vector<double>> acceptanceRate(const System &atom_system, const double &sum_of_potentials, const int &atom_idx, const Vec3 &new_position, const double &T) {
+std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, const float &sum_of_potentials, const int &atom_idx, const Vec3 &new_position, const float &T) {
     const int N = atom_system.getN();
-    const double system_size = atom_system.getSystemSize();
-    const std::vector<double> &potentials = atom_system.getPotentialEnergies();
-    std::vector<double> new_potentials = potentials, dpotentials(N, 0);
+    const float system_size = atom_system.getSystemSize();
+    const std::vector<float> &potentials = atom_system.getPotentialEnergies();
+    std::vector<float> new_potentials = potentials, dpotentials(N, 0);
     int cell_index = atom_system.getCell(new_position);
-    double sum_of_new_potentials = sum_of_potentials;
+    float sum_of_new_potentials = sum_of_potentials;
     for (int i : atom_system.getAtomsInCell(cell_index)) {
     	 if (i != atom_idx) {
             Vec3 position = atom_system.getAtom(i).getPosition();
@@ -102,31 +101,31 @@ std::tuple<double, std::vector<double>> acceptanceRate(const System &atom_system
         dpotentials[i] = new_potentials[i] - potentials[i];
         sum_of_new_potentials += dpotentials[i];
     }
-    const double acceptance = std::exp(-(sum_of_new_potentials - sum_of_potentials) / (kB * T));
-    std::pair<double, std::vector<double>> result(acceptance, dpotentials);
+    const float acceptance = std::exp(-(sum_of_new_potentials - sum_of_potentials) / (T));
+    std::pair<float, std::vector<float>> result(acceptance, dpotentials);
     return result;
 }
 
-void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr, const int &atom_idx, UniformRandomDouble *rd_ptr, const double &dr, const double &T
+void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &atom_idx, UniformRandomFloat *rd_ptr, const float &dr, const float &T
              , int *Naccept_ptr) {
     System &atom_system = *atom_system_ptr;
-    UniformRandomDouble &rd = *rd_ptr;
-    double &sum_of_potentials = *sum_of_potentials_ptr;
-    const std::vector<double> &potential = atom_system.getPotentialEnergies();
-    const double system_size = atom_system.getSystemSize();
+    UniformRandomFloat &rd = *rd_ptr;
+    float &sum_of_potentials = *sum_of_potentials_ptr;
+    const std::vector<float> &potential = atom_system.getPotentialEnergies();
+    const float system_size = atom_system.getSystemSize();
     const Vec3 position = atom_system.getAtom(atom_idx).getPosition();
     //const int random_index = std::floor(10000 * rd());
     //const Vec3 velocity = dr * vs[random_index];
     //const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, velocity, 1.0);
     const Vec3 displacement = dr/std::sqrt(3) * Vec3(1-2*rd(), 1-2*rd(), 1-2*rd());
     const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
-    double acceptance_rate;
-    std::vector<double> dpotentials;
+    float acceptance_rate;
+    std::vector<float> dpotentials;
     tie(acceptance_rate, dpotentials) = acceptanceRate(atom_system, sum_of_potentials, atom_idx, prop_position, T);
     int &Naccept = *Naccept_ptr;
     if (rd() < acceptance_rate) {
         atom_system.updatePosition(atom_idx, prop_position);
-        std::vector<double> new_potentials = potential;
+        std::vector<float> new_potentials = potential;
         for (int i = 0; i < atom_system.getN(); i++) {
             new_potentials[i] += dpotentials[i];
             sum_of_potentials += dpotentials[i];
@@ -136,11 +135,10 @@ void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr, const int &
     }
 }
 
-void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr, UniformRandomDouble *rd_ptr, const double &dr
-              , const double &T, int *Naccept_ptr) {
+void MC_sweep(System *atom_system_ptr, float *sum_of_potentials_ptr, UniformRandomFloat *rd_ptr, const float &dr
+              , const float &T, int *Naccept_ptr) {
     System &atom_system = *atom_system_ptr;
     const int N = atom_system.getN();
-    //#pragma omp parallel for
     for (int i = 0; i < N; i++) {
         MC_step(&atom_system, sum_of_potentials_ptr, i, rd_ptr, dr, T, Naccept_ptr);
     }
@@ -148,53 +146,36 @@ void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr, UniformRan
 
 int main(int argc, char *argv[]) {
     if (argc != 7) {
-        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [resolution]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [seed]" << std::endl;
         return -1;
     }
     // parameters
-    UniformRandomDouble random;
-    std::vector<Vec3> positions, velocities;
-    double system_size = atof(argv[1])*nm;
+    float system_size = atof(argv[1]);
     int N = atoi(argv[2]);
-    double T_init = atof(argv[3]);
+    float T_init = atof(argv[3])/Epsilon;
     int sweeps = atoi(argv[4]);
-    double dr = atof(argv[5])*nm;
-    int resolution = atoi(argv[6]);
-    initialize_vs();
-    positions.resize(N, Vec3());
-    velocities.resize(N, Vec3());
+    float dr = atof(argv[5]);
+    int seed = atoi(argv[6]);
+    UniformRandomFloat random(seed);
+    std::vector<Vec3> positions(N, Vec3()), velocities(N, Vec3());
     //positions = randomDist(N, system_size, &random);
-    positions = cubicLattice(N, system_size);
-    velocities.resize(N, Vec3());
-    System atom_system(system_size, positions, velocities);
+    positions = cubicLattice(N, system_size, &random);
+    System atom_system(system_size, positions, velocities, T_init);
     // start the timer
     auto start = std::chrono::high_resolution_clock::now();
     atom_system.computePotentialEnergy();
-    double potentialEnergies = atom_system.computePotentialEnergy();
+    float potentialEnergies = atom_system.computePotentialEnergy();
     std::ofstream file("MCdata.txt");
-    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << resolution << "\n";
-    double dummy_potential = 0;
-    int runup = 1000, dummy = 0;
+    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << seed << "\n";
+	/*
+    float dummy_potential = 0;
+    int runup = 15000, dummy = 0;
     for (int i = 0; i < runup; i++) {
         MC_sweep(&atom_system, &dummy_potential, &random, dr, T_init, &dummy);
-        /*
-        if (i % (runup/50) == 0) {
-            int barWidth = 50;
-            std::cout << "Runup [";
-            int pos = barWidth * i / runup;
-            for (int j = 0; j < barWidth; ++j) {
-                if (j < pos) std::cout << "=";
-                else if (j == pos) std::cout << ">";
-                else std::cout << " ";
-            }
-            std::cout << "] " << 2*int(i * 50 / runup) << " % " << "\r";
-            std::cout.flush();
-        }
-        */
     }
-    //std::cout << "Runup [" << std::string(50, '=') << "] 100 %" << std::endl;
+	 */
+    int Naccept = 0;
     for (int i = 0; i < sweeps; i++) {
-    	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
         if (i % (sweeps/50) == 0) {
             int barWidth = 50;
@@ -205,24 +186,22 @@ int main(int argc, char *argv[]) {
                 else if (j == pos) std::cout << ">";
                 else std::cout << " ";
             }
-            std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(Naccept)/(N) << "\r";
+            std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(Naccept)/(N*i) << "\r";
             std::cout.flush();
         }
-        if (i % resolution == 0) {
-			/*
-        	std::vector<Vec3> data = atom_system.getData();
-        	for (int j = 0; j < N; j++) {
-        	    file << data[j].getX() << " " << data[j].getY() << " " << data[j].getZ() << "\n";
-        	}
-			*/
-            file << potentialEnergies << " " << 0 << std::endl;
-		}
+        /*
+        for (int j = 0; j < N; j++) {
+            Vec3 position = atom_system.getAtom(j).getPosition();
+            file << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
+        }
+        */
+        file << potentialEnergies << " " << 0 << std::endl;
     }
     std::cout << "[" << std::string(50, '=') << "] 100%\n";
     file.close();
     // stop the timer
     auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed_seconds = stop-start;
+    std::chrono::duration<float> elapsed_seconds = stop-start;
     std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
     return 0;
 }

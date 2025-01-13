@@ -10,6 +10,7 @@ def plot_data(filename):
     f = open(filename, 'r')
     # read from first line the number of particles
     system_size = float(f.readline())
+    temperature = float(f.readline())
     N = int(f.readline())
     steps = int(f.readline())
     resolution = int(f.readline())
@@ -49,7 +50,7 @@ def plot_data(filename):
         return sc,
 
     # Create the animation, which shows every 50th frame
-    ani = FuncAnimation(fig, update, frames=steps, blit=True)
+    ani = FuncAnimation(fig, update, frames=steps, blit=False)
     # Save the animation as a video file
     output_file = 'particles_animation.mp4'
     writer = FFMpegWriter(fps=30, metadata={'artist': 'Matplotlib'}, bitrate=2400)
@@ -58,7 +59,51 @@ def plot_data(filename):
     print(f"Animation saved as {output_file}")
     return None
 
+def plot_energies(filename):
+    kB = 1.38064852e-23
+    # Load data
+    f = open(filename, 'r')
+    # read from first line the number of particles
+    system_size = float(f.readline())
+    N = int(f.readline())
+    steps = int(f.readline())
+    resolution = int(f.readline())
+    steps = steps//resolution
+    e_int = np.zeros(steps)
+    e_kin = np.zeros(steps)
+    for idx, line in enumerate(f):
+        step = idx//(N+1)
+        idx = idx % (N+1)
+        data = line.split()
+        if len(data) == 2:
+            e_int[step] = float(data[0])/kB
+            e_kin[step] = float(data[1])/kB
+        else:
+            continue
+    f.close()
+    e_int = e_int[100:]
+    e_kin = e_kin[100:]
+    # Create plot of energies seperately
+    fig, axs = plt.subplots(1,3)
+    fig.set_size_inches(15, 5)
+    axs[0].plot(e_int, label='Interaction energy')
+    axs[0].set_xlabel('Time in fs')
+    axs[0].set_ylabel('Interaction energy in kB')
+    axs[0].legend()
+    axs[1].plot(e_kin, label='Kinetic energy')
+    axs[1].set_xlabel('Time in fs')
+    axs[1].set_ylabel('Kinetic energy in kB')
+    axs[1].legend()
+    axs[2].plot(e_int+e_kin, label='Total energy')
+    axs[2].set_xlabel('Time in fs')
+    axs[2].set_ylabel('Total energy in kB')
+    plt.savefig('energies.png')
+    plt.close()
+    print(f"Plot saved as 'energies.png")
+
+
 if __name__ == '__main__':
-    filename = 'data.txt'
     #filename = 'MCdata.txt'
+    filename = 'data.txt'
     plot_data(filename)
+    #plot_energies(filename)

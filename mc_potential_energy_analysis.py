@@ -17,14 +17,13 @@ def energies(filename):
     N = int(f.readline())
     sweeps = int(f.readline())
     resolution = int(f.readline())
-    print(f'Density: {N/scipy.constants.N_A/system_size**3/1000} moles per liter')
     sweeps = sweeps//resolution
     e_pot = np.zeros(sweeps)
     for idx, line in enumerate(f):
         data = line.split()
-        e_pot[idx] = float(data[0])/kB
+        e_pot[idx] = float(data[0])
     f.close()
-    return e_pot/N
+    return e_pot
 
 
 def plot_energy(data, filename="energies.png"):
@@ -114,6 +113,6 @@ def plot_means(data, resolution=1, correlation_time=1, filename="means.png"):
 if __name__ == "__main__":
     # Example data
     potential_energies = energies("MCdata.txt")
-    analysis_results = binning_analysis_with_variance(potential_energies)
-    save_binning_variance_plot(analysis_results)
-    plot_means(potential_energies,500,70)
+    #analysis_results = binning_analysis_with_variance(potential_energies)
+    #save_binning_variance_plot(analysis_results)
+    plot_means(potential_energies,1,1)
