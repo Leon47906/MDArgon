@@ -46,7 +46,8 @@ std::vector<double> calculateNormalizedPairDensity(
         std::vector<double> local_counts(num_rings, 0);
 
         for (size_t i = 0; i < N; ++i) {
-            for (size_t j = i + 1; j < N; ++j) {
+            for (size_t j = 0; j < N; ++j) {
+                if (i == j) continue;
                 /*
                 Vec3 dr = PeriodicDifference(
                     Vec3(std::get<0>(particles[step][i]), std::get<1>(particles[step][i]), std::get<2>(particles[step][i])),
@@ -96,7 +97,7 @@ std::vector<double> calculateNormalizedPairDensity(
     // Reduktion der lokalen Zählwerte#
     double rho = N / std::pow(system_size, 3); // Teilchendichte
     for (size_t i = 0; i < num_rings; ++i) {
-        double r = (i + 0.5) * ringsize;
+        double r = i * ringsize;
         double volume = 4.0 / 3.0 * M_PI * (std::pow((r + ringsize), 3) - std::pow(r, 3));
         counts[i] = counts[i] / (rho * volume * steps * N);
     }
