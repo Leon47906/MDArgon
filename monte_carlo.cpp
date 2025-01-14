@@ -85,23 +85,31 @@ std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, 
     std::vector<float> new_potentials = potentials, dpotentials(N, 0);
     int cell_index = atom_system.getCell(new_position);
     float sum_of_new_potentials = sum_of_potentials;
+    int box_N = atom_system.getBoxN();
+    if (cell_index < 0 || cell_index >= box_N * box_N * box_N) {
+        std::cout << new_position.getX() << " " << new_position.getY() << " " << new_position.getZ() << std::endl;
+        std::cerr << "Error: Cell index " << cell_index <<" out of bounds" << std::endl;
+        exit(1);
+    }
     for (int i : atom_system.getAtomsInCell(cell_index)) {
     	 if (i != atom_idx) {
             Vec3 position = atom_system.getAtom(i).getPosition();
-            Vec3 diff_new = atom_system.PeriodicDifferece(new_position, position, system_size);
+            Vec3 diff_new = PeriodicDifferece(new_position, position, system_size);
             new_potentials[i] = LennardJones(diff_new.norm2());
             dpotentials[i] = new_potentials[i] - potentials[i];
             sum_of_new_potentials += dpotentials[i];
         }
     }
     for (int i : atom_system.getAtomsInNeighboringCells(cell_index)) {
-        Vec3 position = atom_system.getAtom(i).getPosition();
-        Vec3 diff_new = atom_system.PeriodicDifferece(new_position, position, system_size);
-        new_potentials[i] = LennardJones(diff_new.norm2());
-        dpotentials[i] = new_potentials[i] - potentials[i];
-        sum_of_new_potentials += dpotentials[i];
+      	if (i != atom_idx) {
+        	Vec3 position = atom_system.getAtom(i).getPosition();
+        	Vec3 diff_new = PeriodicDifferece(new_position, position, system_size);
+        	new_potentials[i] = LennardJones(diff_new.norm2());
+        	dpotentials[i] = new_potentials[i] - potentials[i];
+        	sum_of_new_potentials += dpotentials[i];
+        }
     }
-    const float acceptance = std::exp(-(sum_of_new_potentials - sum_of_potentials) / (T));
+    const float acceptance = std::exp(-(sum_of_new_potentials-sum_of_potentials) / T);
     std::pair<float, std::vector<float>> result(acceptance, dpotentials);
     return result;
 }
@@ -117,7 +125,7 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     //const int random_index = std::floor(10000 * rd());
     //const Vec3 velocity = dr * vs[random_index];
     //const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, velocity, 1.0);
-    const Vec3 displacement = dr/std::sqrt(3) * Vec3(1-2*rd(), 1-2*rd(), 1-2*rd());
+    const Vec3 displacement = dr/std::sqrt(3) * Vec3(2*rd()-1, 2*rd()-1, 2*rd()-1);
     const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
     float acceptance_rate;
     std::vector<float> dpotentials;
@@ -166,7 +174,7 @@ int main(int argc, char *argv[]) {
     atom_system.computePotentialEnergy();
     float potentialEnergies = atom_system.computePotentialEnergy();
     std::ofstream file("MCdata.txt");
-    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << seed << "\n";
+    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << 1 << "\n";
 	/*
     float dummy_potential = 0;
     int runup = 15000, dummy = 0;
@@ -174,9 +182,19 @@ int main(int argc, char *argv[]) {
         MC_sweep(&atom_system, &dummy_potential, &random, dr, T_init, &dummy);
     }
 	 */
-    int Naccept = 0;
+    int global_Naccept = 0;
     for (int i = 0; i < sweeps; i++) {
+      	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
+        float acceptance_rate = static_cast<float>(Naccept)/(N);
+        global_Naccept += Naccept;
+        // adjusst dr, such that an acceptance rate of 20% is achieved
+        if (acceptance_rate < 0.15 && dr > 0.01) {
+        	dr *= 0.9;
+        }
+        else if (acceptance_rate > 0.25 && dr < system_size/2) {
+        	dr *= 1.1;
+        }
         if (i % (sweeps/50) == 0) {
             int barWidth = 50;
             std::cout << "[";
@@ -186,7 +204,7 @@ int main(int argc, char *argv[]) {
                 else if (j == pos) std::cout << ">";
                 else std::cout << " ";
             }
-            std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(Naccept)/(N*i) << "\r";
+            std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(global_Naccept)/(N*(i+1)) << " " << dr << "\r";
             std::cout.flush();
         }
         /*

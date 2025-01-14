@@ -14,6 +14,7 @@ def plot_data(filename):
     N = int(f.readline())
     steps = int(f.readline())
     resolution = int(f.readline())
+    dt = float(f.readline())
     steps = steps//resolution
     x = np.zeros((N,steps))
     y = np.zeros((N,steps))
@@ -21,12 +22,14 @@ def plot_data(filename):
     e_pot = np.zeros(steps)
     e_kin = np.zeros(steps)
     for idx, line in enumerate(f):
-        step = idx//(N+1)
-        idx = idx % (N+1)
+        step = idx//(N+2)
+        idx = idx % (N+2)
         data = line.split()
         if len(data) == 2:
             e_pot[step] = float(data[0])/kB
             e_kin[step] = float(data[1])/kB
+        elif len(data) == 1:
+            continue
         else:
             # load the x, y, z coordinates into the arrays
             x[idx, step] = float(data[0])
@@ -72,36 +75,41 @@ def plot_energies(filename):
     N = int(f.readline())
     steps = int(f.readline())
     resolution = int(f.readline())
+    dt = float(f.readline())
     steps = steps//resolution
     e_int = np.zeros(steps)
     e_kin = np.zeros(steps)
     for idx, line in enumerate(f):
-        step = idx//(N+1)
-        idx = idx % (N+1)
+        step = idx//(N+2)
+        idx = idx % (N+2)
         data = line.split()
         if len(data) == 2:
             e_int[step] = float(data[0])/N
             e_kin[step] = float(data[1])/N
+        elif len(data) == 1:
+            continue
         else:
             continue
     f.close()
     # Create the time axis with correct scaling to fs
     # std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB))
-    dt = 0.1*np.sqrt(Mass*Sigma**2/Epsilon)/10e-15
+    dt *= 10e15 # dt in seconds
+    dt *= np.sqrt(Mass*Sigma**2/Epsilon)
     time = np.linspace(0, steps*dt, steps)
+    time /= 1000 # convert to ps
     # Create plot of energies seperately
     fig, axs = plt.subplots(1,3)
     fig.set_size_inches(15, 5)
     axs[0].plot(time, e_int, label='Interaction energy')
-    axs[0].set_xlabel('Time in fs')
+    axs[0].set_xlabel('Time in ps')
     axs[0].set_ylabel(r'Interaction energy per particle in $\epsilon$')
     axs[0].legend()
     axs[1].plot(time, e_kin, label='Kinetic energy')
-    axs[1].set_xlabel('Time in fs')
+    axs[1].set_xlabel('Time in ps')
     axs[1].set_ylabel(r'Kinetic energy per particle in $\epsilon$')
     axs[1].legend()
     axs[2].plot(time, e_int+e_kin, label='Total energy')
-    axs[2].set_xlabel('Time in fs')
+    axs[2].set_xlabel('Time in ps')
     axs[2].set_ylabel(r'Total energy per particle in $\epsilon$')
     plt.savefig('energies.png')
     plt.close()

@@ -17,7 +17,6 @@ def energies(filename):
     N = int(f.readline())
     sweeps = int(f.readline())
     seed = int(f.readline())
-    sweeps = sweeps
     e_pot = np.zeros(sweeps)
     for idx, line in enumerate(f):
         data = line.split()
@@ -49,8 +48,6 @@ def binning_analysis_with_variance(data):
     max_bin_size = 2**int(np.floor(np.log2(n)))  # Maximum bin size as a power of 2
     results = {'bin_size': [], 'variance': []}
     total_variance = np.var(data)
-    print(data.mean())
-    print(total_variance)
     bin_size = 1
     while bin_size <= max_bin_size:
         # Group data into bins
@@ -113,6 +110,6 @@ def plot_means(data, resolution=1, correlation_time=1, filename="means.png"):
 if __name__ == "__main__":
     # Example data
     potential_energies = energies("MCdata.txt")
-    #analysis_results = binning_analysis_with_variance(potential_energies)
-    #save_binning_variance_plot(analysis_results)
-    plot_means(potential_energies,1,1)
+    analysis_results = binning_analysis_with_variance(potential_energies)
+    save_binning_variance_plot(analysis_results)
+    plot_means(potential_energies,100,3500)

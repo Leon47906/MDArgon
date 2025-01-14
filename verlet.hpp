@@ -112,6 +112,17 @@ inline float dot(const Vec3& v1, const Vec3& v2) {
 
 const static std::vector<Vec3> unit_velocities{Vec3(1,0,0), Vec3(0,1,0), Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,-1,0), Vec3(0,0,-1)};
 
+inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) {
+        const Vec3 r = r1 - r2;
+        float x = r.getX();
+        float y = r.getY();
+        float z = r.getZ();
+        x -= period * std::round(x / period);
+        y -= period * std::round(y / period);
+        z -= period * std::round(z / period);
+        return Vec3(x, y, z);
+    }
+
 class Atom{
 	Vec3 position, velocity;
     public:
@@ -135,7 +146,7 @@ class Atom{
 };
 
 class System{
-    float system_size, N;
+    float system_size, N, virial;
     int box_N=std::ceil(system_size/2.5);
     float box_L=system_size/box_N;
     std::vector<std::vector<int>> cells;
@@ -190,7 +201,6 @@ class System{
     }
     // I want to implement a function, that give me the indices of the neighboring cells
     inline int getCell(Vec3 position) const {
-        //Vec3 position = atoms[atom_index].getPosition();
         int index = 0;
         index += std::floor(position.getX() / box_L);
         index += std::floor(position.getY() / box_L) * box_N;
@@ -269,39 +279,23 @@ class System{
                       << atoms[i].getVelocity().getY() << " " << atoms[i].getVelocity().getZ() << std::endl;
         }
     }
-    inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) const {
-        const Vec3 r = r1 - r2;
-        float x = r.getX();
-        float y = r.getY();
-        float z = r.getZ();
-        while (x > period * 0.5) x -= period;
-        while (x < -period * 0.5) x += period;
 
-        while (y > period * 0.5) y -= period;
-        while (y < -period * 0.5) y += period;
-
-        while (z > period * 0.5) z -= period;
-        while (z < -period * 0.5) z += period;
-        return Vec3(x, y, z);
-    }
     inline Vec3 PeriodicPositionUpdate(const Vec3& position, const Vec3& velocity, const float& dt) const {
         Vec3 new_position = position + velocity * dt;
         float x = new_position.getX();
         float y = new_position.getY();
         float z = new_position.getZ();
-        while (x < 0) x += system_size;
-        while (x > system_size) x -= system_size;
-        while (y < 0) y += system_size;
-        while (y > system_size) y -= system_size;
-        while (z < 0) z += system_size;
-        while (z > system_size) z -= system_size;
+        x = std::fmod(x + system_size, system_size);
+        y = std::fmod(y + system_size, system_size);
+        z = std::fmod(z + system_size, system_size);
         return Vec3(x, y, z);
     }
 	// Non-parallel version of the computeAccels function
     void computeAccels() {
-      	// Reset accelerations and potential energies
+      	// Reset accelerations, potential energies and virial
         std::fill(accels.begin(), accels.end(), Vec3());
         std::fill(E_pot.begin(), E_pot.end(), 0);
+        virial = 0;
         for (int cell = 0; cell < box_N * box_N * box_N; ++cell) {
             const std::vector<int>& cell_atoms = cells[cell];
             const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
@@ -318,6 +312,7 @@ class System{
                     float pot = LennardJones(r2);
                     // Lennard Jones potential
                     E_pot[atom_i] += pot;
+                    virial += r2*accel.norm2();
                     accels[atom_i] += accel;
                     accels[atom_j] -= accel; // Newton's Third Law
                     }
@@ -334,6 +329,7 @@ class System{
                         float pot = LennardJones(r2);
                         accels[atom_i] += accel;
                         E_pot[atom_i] += pot/2;
+                        virial += r2*accel.norm2();
                     }
                 }
             }
@@ -347,44 +343,9 @@ class System{
                 float r2 = r.norm2();
                 float pot = LennardJones(r2);
                 E_pot[i] += pot;
+                virial += r2*ComputeAccel(r2);
             }
         }
-        /*
-        for (int cell = 0; cell < box_N * box_N * box_N; ++cell) {
-            const std::vector<int>& cell_atoms = cells[cell];
-            const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
-
-
-            // Compute interactions within the same cell
-            for (int atom_i : cell_atoms) {
-                for (int atom_j : cell_atoms) {
-                  	if (atom_i < atom_j) {
-                    Vec3 ri = atoms[atom_i].getPosition();
-                    Vec3 rj = atoms[atom_j].getPosition();
-                    Vec3 r = ri - rj;
-                    float r2 = r.norm2();
-                    float pot = LennardJones(r2);
-                    // Lennard Jones potential
-                    E_pot[atom_i] += pot;
-                    }
-                }
-            }
-            // Compute interactions with neighboring cells
-            for (int neighbor_cell : neighboring_cells) {
-                const std::vector<int>& neighbor_atoms = cells[neighbor_cell];
-                for (int atom_i : cell_atoms) {
-                    for (int atom_j : neighbor_atoms) {
-                        Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
-                        float r2 = r.norm2();
-                        float pot = LennardJones(r2);
-                        E_pot[atom_i] += pot/2;
-                    }
-                }
-            }
-
-
-        }
-         */
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
 	inline void update_positions(float dt){
@@ -420,7 +381,7 @@ class System{
     }
     void run(int steps, float dt, char *filename, int resolution) {
         std::ofstream file(filename);
-        file << system_size * Sigma * nm << "\n" << T_init * Epsilon << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n";
+        file << system_size * Sigma * nm << "\n" << T_init * Epsilon << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n" << dt << "\n";
     	std::vector<Vec3> data(N, Vec3());
         std::array<float,2> energies{0,0};
         //calculation of v1/2
@@ -445,11 +406,17 @@ class System{
             data = getData();
             energies[0] = std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
 			energies[1] = std::accumulate(E_kin.begin(), E_kin.end(), 0.0);
+	        // give out an error if any of the energies is nan
+			if (energies[0] != energies[0] || energies[1] != energies[1]) {
+                std::cerr << "Error: Energy is NaN" << std::endl;
+				break;
+            }
             if (i % resolution == 0) {
                 for (int j = 0; j < N; j++) {
                     file << data[j].getX() * Sigma * nm << " " << data[j].getY() * Sigma * nm << " " << data[j].getZ() * Sigma * nm << "\n";
                 }
-                file << energies[0] << " " << energies[1] << std::endl;
+                file << energies[0] << " " << energies[1] << "\n";
+                file << virial << std::endl;
             }
         }
         file.close();

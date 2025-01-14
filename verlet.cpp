@@ -75,20 +75,7 @@ int main(int argc, char *argv[]) {
         resolution = atof(argv[6]);
         positions.resize(N, Vec3());
         velocities.resize(N, Vec3());
-        // initialize the positions from file "initial_positions.txt"
-        std::ifstream file("initial_positions.txt");
-        if (file.is_open()) {
-            for (int i = 0; i < N; i++) {
-                float x, y, z;
-                file >> x >> y >> z;
-                positions[i] = Vec3(x, y, z);
-            }
-            file.close();
-        }
-        else {
-            positions = cubicLattice(N, system_size);
-        }
-        file.close();
+        positions = cubicLattice(N, system_size);
         UniformRandomFloat random(1234);
 		float v0 = std::sqrt(3 * T_init);
         for (int i = 0; i < N; i++) {
@@ -108,12 +95,12 @@ int main(int argc, char *argv[]) {
     }
     else if (argc == 2) {
         system_size = 4;
-        N = 2;
-        steps = 1000000;
+        N = 1;
+        steps = 10000;
         dt = 1*fs/std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB));
-        resolution = 500;
-        positions = {Vec3(1,1,1), Vec3(1,2,1),Vec3(1,3,1)};
-        velocities = {Vec3(0,0,0), Vec3(0,0,0),Vec3()};
+        resolution = 50;
+        positions = {Vec3(1,1,1)};
+        velocities = {Vec3(-1,0,0)};
     }
     else if (argc == 1) {
         system_size = 2;
