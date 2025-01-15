@@ -96,7 +96,7 @@ def plot_energies(filename):
     dt *= 10e15 # dt in seconds
     dt *= np.sqrt(Mass*Sigma**2/Epsilon)
     time = np.linspace(0, steps*dt, steps)
-    time /= 1000 # convert to ps
+    time *= resolution/1000 # convert to ps
     # Create plot of energies seperately
     fig, axs = plt.subplots(1,3)
     fig.set_size_inches(15, 5)
@@ -119,5 +119,5 @@ def plot_energies(filename):
 if __name__ == '__main__':
     #filename = 'MCdata.txt'
     filename = 'data.txt'
-    #plot_data(filename)
+    plot_data(filename)
     plot_energies(filename)

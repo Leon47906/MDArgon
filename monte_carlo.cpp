@@ -94,7 +94,7 @@ std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, 
     for (int i : atom_system.getAtomsInCell(cell_index)) {
     	 if (i != atom_idx) {
             Vec3 position = atom_system.getAtom(i).getPosition();
-            Vec3 diff_new = PeriodicDifferece(new_position, position, system_size);
+            Vec3 diff_new = PeriodicDifference(new_position, position, system_size);
             new_potentials[i] = LennardJones(diff_new.norm2());
             dpotentials[i] = new_potentials[i] - potentials[i];
             sum_of_new_potentials += dpotentials[i];
@@ -103,7 +103,7 @@ std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, 
     for (int i : atom_system.getAtomsInNeighboringCells(cell_index)) {
       	if (i != atom_idx) {
         	Vec3 position = atom_system.getAtom(i).getPosition();
-        	Vec3 diff_new = PeriodicDifferece(new_position, position, system_size);
+        	Vec3 diff_new = PeriodicDifference(new_position, position, system_size);
         	new_potentials[i] = LennardJones(diff_new.norm2());
         	dpotentials[i] = new_potentials[i] - potentials[i];
         	sum_of_new_potentials += dpotentials[i];
@@ -171,7 +171,6 @@ int main(int argc, char *argv[]) {
     System atom_system(system_size, positions, velocities, T_init);
     // start the timer
     auto start = std::chrono::high_resolution_clock::now();
-    atom_system.computePotentialEnergy();
     float potentialEnergies = atom_system.computePotentialEnergy();
     std::ofstream file("MCdata.txt");
     file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << 1 << "\n";

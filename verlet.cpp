@@ -103,10 +103,11 @@ int main(int argc, char *argv[]) {
         velocities = {Vec3(-1,0,0)};
     }
     else if (argc == 1) {
-        system_size = 2;
+        system_size = 7;
         N = 7;
-        steps = 75000;
-        dt = 1*fs;
+        steps = 3000000;
+        dt = 1*fs/std::sqrt(Mass*Dalton*Sigma*Sigma*nm*nm/(Epsilon*kB));
+        resolution = 10000;
         /*
         positions = np.array([[0.00, 0.00], [0.02, 0.39], [0.34, 0.17], [0.36, -0.21],
                       [-0.02, -0.40], [-0.35, -0.16], [-0.31, 0.21]]) * 1e-9
@@ -116,11 +117,11 @@ int main(int argc, char *argv[]) {
         positions = {Vec3(0.00, 0.00, 0), Vec3(0.02, 0.39, 0), Vec3(0.34, 0.17, 0), Vec3(0.36, -0.21, 0),
                      Vec3(-0.02, -0.40, 0), Vec3(-0.35, -0.16, 0), Vec3(-0.31, 0.21, 0)};
         for (int i = 0; i < positions.size(); i++) {
-             positions[i] = positions[i] + Vec3(0.5*system_size, 0.5*system_size, 0);
+             positions[i] = (positions[i]/Sigma + Vec3(0.5*system_size, 0.5*system_size, 0));
              std::cout << positions[i].getX() << " " << positions[i].getY() << " " << positions[i].getZ() << std::endl;
         }
-        velocities = {Vec3(-30.00, -20.00, 0), Vec3(50.00, -90.00, 0), Vec3(-70.00, -60.00, 0), Vec3(90.00, 40.00, 0),
-                      Vec3(80.00, 90.00, 0), Vec3(-40.00, 100.00, 0), Vec3(-80.00, -60.00, 0)};
+        velocities = {1*Vec3(-0.3, -0.2, 0), 1*Vec3(0.5, -0.9, 0), 1*Vec3(-0.7, -0.6, 0), 1*Vec3(0.9, 0.4, 0),
+                      1*Vec3(0.8, 0.9, 0), 1*Vec3(-0.4, 1.00, 0), 1*Vec3(-0.8, -0.6, 0)};
     }
     else {
         std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [steps] [dt] [resolution]" << std::endl;

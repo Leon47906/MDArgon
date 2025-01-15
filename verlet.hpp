@@ -26,18 +26,17 @@ constexpr float Mass = 39.948; //Mass in Dalton
 constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
 
 
-inline float LennardJones(float r2) {
+inline float LennardJones(const float& r2) {
 	if (r2 > 6.25) return 0;
   	float r6 = r2*r2*r2;
     return 4.0/r6*(1.0/r6 - 1.0)-shift;
 }
 
-inline float ComputeAccel(float r2) {
+inline float ComputeAccel(const float& r2) {
     if (r2 > 6.25) return 0;
     else {
     	float r6 = r2*r2*r2;
         float r8 = r6*r2;
-        //float r_inv = 1/std::sqrt(r2);
         return 24.0 / r8 * (2.0/r6 - 1.0);
     }
 }
@@ -112,7 +111,7 @@ inline float dot(const Vec3& v1, const Vec3& v2) {
 
 const static std::vector<Vec3> unit_velocities{Vec3(1,0,0), Vec3(0,1,0), Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,-1,0), Vec3(0,0,-1)};
 
-inline Vec3 PeriodicDifferece(const Vec3& r1,const Vec3& r2, const float& period) {
+inline Vec3 PeriodicDifference(const Vec3& r1,const Vec3& r2, const float& period) {
         const Vec3 r = r1 - r2;
         float x = r.getX();
         float y = r.getY();
@@ -323,7 +322,7 @@ class System{
                 const std::vector<int>& neighbor_atoms = cells[neighbor_cell];
                 for (int atom_i : cell_atoms) {
                     for (int atom_j : neighbor_atoms) {
-                        Vec3 r = PeriodicDifferece(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
+                        Vec3 r = PeriodicDifference(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
                         float r2 = r.norm2();
                         Vec3 accel = r*ComputeAccel(r2);
                         float pot = LennardJones(r2);
@@ -339,10 +338,10 @@ class System{
         std::fill(E_pot.begin(), E_pot.end(), 0);
         for (int i = 0; i < N; i++) {
             for (int j = i + 1; j < N; j++) {
-                Vec3 r = PeriodicDifferece(atoms[i].getPosition(), atoms[j].getPosition(), system_size);
+                Vec3 r = PeriodicDifference(atoms[i].getPosition(), atoms[j].getPosition(), system_size);
                 float r2 = r.norm2();
                 float pot = LennardJones(r2);
-                E_pot[i] += pot;
+                E_pot[i] += pot/2;
                 virial += r2*ComputeAccel(r2);
             }
         }
