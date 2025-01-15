@@ -47,10 +47,10 @@ def plot(filename):
         temperatures[i] = 2/3*np.mean(e_kin[production_start:production_start+i+1])
         pressures[i] = kB*N*temperatures[i]/system_size**3 + np.mean(virial[production_start:production_start+i+1])/(3*system_size**3)
         pressures[i] *= 1e-9
-    dt = 1*10e15 # dt in seconds
+    dt *= 10e15 # dt in seconds
     dt *= np.sqrt(Mass*Sigma**2/Epsilon/kB)
     time = np.linspace(0, steps*dt, steps-production_start)
-    time /= 1000 # convert to ps
+    time *= resolution/1000 # convert to ps
     # Create plot of the temperature and pressure, with a red line at the mean temperature and pressure
     fig, axs = plt.subplots(1,2)
     fig.set_size_inches(14, 4)
