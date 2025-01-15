@@ -111,6 +111,7 @@ def plot_energies(filename):
     axs[2].plot(time, e_int+e_kin, label='Total energy')
     axs[2].set_xlabel('Time in ps')
     axs[2].set_ylabel(r'Total energy per particle in $\epsilon$')
+    plt.title(f'Energy plot for {N} particles, initial temperature {temperature} K, system size {system_size} nm, dt {dt} fs')
     plt.savefig('energies.png')
     plt.close()
     print(f"Plot saved as 'energies.png")
@@ -119,5 +120,5 @@ def plot_energies(filename):
 if __name__ == '__main__':
     #filename = 'MCdata.txt'
     filename = 'data.txt'
-    plot_data(filename)
+    #plot_data(filename)
     plot_energies(filename)

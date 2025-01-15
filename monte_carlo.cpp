@@ -78,11 +78,12 @@ std::vector<Vec3> cubicLattice(int N, float system_size, UniformRandomFloat *rd_
 }
 
 
-std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, const float &sum_of_potentials, const int &atom_idx, const Vec3 &new_position, const float &T) {
+void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System &atom_system, const float &sum_of_potentials, const int &atom_idx, const Vec3 &new_position, const float &T) {
     const int N = atom_system.getN();
     const float system_size = atom_system.getSystemSize();
     const std::vector<float> &potentials = atom_system.getPotentialEnergies();
-    std::vector<float> new_potentials = potentials, dpotentials(N, 0);
+    std::vector<float> new_potentials = potentials;
+    float* dpotentials = dpotentials_ptr;
     int cell_index = atom_system.getCell(new_position);
     float sum_of_new_potentials = sum_of_potentials;
     int box_N = atom_system.getBoxN();
@@ -109,9 +110,7 @@ std::tuple<float, std::vector<float>> acceptanceRate(const System &atom_system, 
         	sum_of_new_potentials += dpotentials[i];
         }
     }
-    const float acceptance = std::exp(-(sum_of_new_potentials-sum_of_potentials) / T);
-    std::pair<float, std::vector<float>> result(acceptance, dpotentials);
-    return result;
+    *acceptance_ptr = std::exp(-(sum_of_new_potentials-sum_of_potentials) / T);
 }
 
 void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &atom_idx, UniformRandomFloat *rd_ptr, const float &dr, const float &T
@@ -122,14 +121,15 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     const std::vector<float> &potential = atom_system.getPotentialEnergies();
     const float system_size = atom_system.getSystemSize();
     const Vec3 position = atom_system.getAtom(atom_idx).getPosition();
-    //const int random_index = std::floor(10000 * rd());
-    //const Vec3 velocity = dr * vs[random_index];
-    //const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, velocity, 1.0);
     const Vec3 displacement = dr/std::sqrt(3) * Vec3(2*rd()-1, 2*rd()-1, 2*rd()-1);
     const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
     float acceptance_rate;
+    /*
     std::vector<float> dpotentials;
-    tie(acceptance_rate, dpotentials) = acceptanceRate(atom_system, sum_of_potentials, atom_idx, prop_position, T);
+    dpotentials.reserve(atom_system.getN());
+     */
+    float* dpotentials = new float[atom_system.getN()];
+    acceptanceRate(&acceptance_rate, dpotentials ,atom_system, sum_of_potentials, atom_idx, prop_position, T);
     int &Naccept = *Naccept_ptr;
     if (rd() < acceptance_rate) {
         atom_system.updatePosition(atom_idx, prop_position);
@@ -141,6 +141,7 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
         atom_system.updatePotentialEnergies(new_potentials);
         Naccept++;
     }
+    delete[] dpotentials;
 }
 
 void MC_sweep(System *atom_system_ptr, float *sum_of_potentials_ptr, UniformRandomFloat *rd_ptr, const float &dr
@@ -183,12 +184,16 @@ int main(int argc, char *argv[]) {
 	 */
     int global_Naccept = 0;
     for (int i = 0; i < sweeps; i++) {
+        if (potentialEnergies != potentialEnergies) {
+            std::cerr << "Error: Energy is NaN" << std::endl;
+            break;
+        }
       	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
         float acceptance_rate = static_cast<float>(Naccept)/(N);
         global_Naccept += Naccept;
         // adjusst dr, such that an acceptance rate of 20% is achieved
-        if (acceptance_rate < 0.15 && dr > 0.01) {
+        if (acceptance_rate < 0.15 && dr > 0.00001) {
         	dr *= 0.9;
         }
         else if (acceptance_rate > 0.25 && dr < system_size/2) {

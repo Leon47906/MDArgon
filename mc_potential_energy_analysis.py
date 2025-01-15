@@ -9,7 +9,6 @@ from sympy.physics.units import avogadro_number
 
 
 def energies(filename):
-    kB = 1.38064852e-23
     # Load data
     f = open(filename, 'r')
     # read from first line the number of particles
@@ -26,9 +25,15 @@ def energies(filename):
 
 
 def plot_energy(data, filename="energies.png"):
-    plt.plot(data, label='Potential energy in kB')
+    nsweeps = np.zeros(len(data))
+    mean_data = np.zeros(len(data))
+    for idx, i in enumerate(data):
+        nsweeps[idx] = idx
+        mean_data[idx] = np.mean(data[:idx+1])
+    # Plot the data
+    plt.plot(nsweeps,mean_data, label='Potential energy in kB')
     plt.xlabel('Sweeps')
-    plt.ylabel('Potential energy in kB')
+    plt.ylabel(r'Potential energy in $\epsilon$')
     plt.legend()
     plt.savefig(filename)
     plt.close()
@@ -112,4 +117,5 @@ if __name__ == "__main__":
     potential_energies = energies("MCdata.txt")
     analysis_results = binning_analysis_with_variance(potential_energies)
     save_binning_variance_plot(analysis_results)
-    plot_means(potential_energies,100,3500)
+    plot_energy(potential_energies)
+    #plot_means(potential_energies,100,140)

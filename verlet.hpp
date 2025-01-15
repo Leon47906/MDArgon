@@ -289,7 +289,6 @@ class System{
         z = std::fmod(z + system_size, system_size);
         return Vec3(x, y, z);
     }
-	// Non-parallel version of the computeAccels function
     void computeAccels() {
       	// Reset accelerations, potential energies and virial
         std::fill(accels.begin(), accels.end(), Vec3());
@@ -300,21 +299,23 @@ class System{
             const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
             if (cell_atoms.empty()) continue;
             // Compute interactions within the same cell
-            for (int atom_i : cell_atoms) {
-                for (int atom_j : cell_atoms) {
-                  	if (atom_i < atom_j) {
+            int N = cell_atoms.size();
+            for (int i = 0; i < N; i++) {
+                for (int j = i + 1; j < N; j++) {
+                    int atom_i = cell_atoms[i];
+                    int atom_j = cell_atoms[j];
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
                     Vec3 r = ri - rj;
                     float r2 = r.norm2();
                     Vec3 accel = r*ComputeAccel(r2);
                     float pot = LennardJones(r2);
-                    // Lennard Jones potential
-                    E_pot[atom_i] += pot;
-                    virial += r2*accel.norm2();
                     accels[atom_i] += accel;
                     accels[atom_j] -= accel; // Newton's Third Law
-                    }
+                    // Lennard Jones potential
+                    E_pot[atom_i] += pot/2;
+                    E_pot[atom_j] += pot/2;
+                    virial += r2*accel.norm2();
                 }
             }
             // Compute interactions with neighboring cells
