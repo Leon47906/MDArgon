@@ -14,13 +14,14 @@ def plot_pair_density(file_path, parameters):
             N = file.readline().strip()
             steps = file.readline().strip()
             temp = file.readline().strip()
+            sigma = float(file.readline().strip())
             ringsize = float(file.readline().strip())
         
         with open(file_path, 'r') as file:
             results = [float(line.strip()) for line in file.readlines()]
         
         # X-Achse (Radien basierend auf der Ringgröße berechnen)
-        radii = [ringsize*i for i in range(len(results))]
+        radii = [ringsize*i/sigma for i in range(len(results))]
         
         # Mittelwert der paarweisen Dichte berechnen
         mean_density = sum(results) / len(results)
@@ -30,7 +31,7 @@ def plot_pair_density(file_path, parameters):
         plt.plot(radii, results, linestyle='-', color='b', label='Paarweise Dichte')
         plt.plot(radii, [mean_density for i in range(len(results))], linestyle='--', color='r', label='Mittelwert')
         plt.title("Radiale Verteilungsfuntion für Systemgröße: " + system_size + " nm, Teilchenanzahl: " + N + "\n" + "Zeitschritte: " + steps + ", Temperatur: " + temp + " K")
-        plt.xlabel("r/sigma")
+        plt.xlabel(r"$r/\sigma$")
         plt.ylabel("g(r)")
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend()

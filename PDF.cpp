@@ -46,8 +46,7 @@ std::vector<double> calculateNormalizedPairDensity(
         std::vector<double> local_counts(num_rings, 0);
 
         for (size_t i = 0; i < N; ++i) {
-            for (size_t j = 0; j < N; ++j) {
-                if (i == j) continue;
+            for (size_t j = i+1; j < N; ++j) {
                 /*
                 Vec3 dr = PeriodicDifference(
                     Vec3(std::get<0>(particles[step][i]), std::get<1>(particles[step][i]), std::get<2>(particles[step][i])),
@@ -75,7 +74,7 @@ std::vector<double> calculateNormalizedPairDensity(
                             double distance = std::sqrt(distanceSquared);
                             size_t ring = std::floor(distance/ringsize);
                             if (ring < num_rings) {
-                                counts[ring]++;
+                                local_counts[ring]++;
                             }
                         }
                     }
@@ -99,7 +98,7 @@ std::vector<double> calculateNormalizedPairDensity(
     for (size_t i = 0; i < num_rings; ++i) {
         double r = i * ringsize;
         double volume = 4.0 / 3.0 * M_PI * (std::pow((r + ringsize), 3) - std::pow(r, 3));
-        counts[i] = counts[i] / (rho * volume * steps * N);
+        counts[i] = 2 * counts[i] / (rho * volume * steps * N);
     }
     std::cout << "]" << "\n";
     return counts;
@@ -126,9 +125,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Parse header lines
-    double system_size , temp, N, steps, res;
+    double system_size , temp, N, steps, res, dt;
     std::string line;
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 6; ++i) {
         if (!std::getline(inputFile, line)) {
             std::cerr << "Error: Missing header lines in the input file.\n";
             return 1;
@@ -144,6 +143,8 @@ int main(int argc, char* argv[]) {
             iss >> steps;
         } else if (i == 4) {
             iss >> res;
+        } else if (i == 5) {
+            iss >> dt;
         }
     }
     constexpr double sigma = 0.33916*1e-9; // m
@@ -152,13 +153,14 @@ int main(int argc, char* argv[]) {
     std::cout << "temp: " << temp << ", ";
     std::cout << "N: " << N << ", ";
     std::cout << "steps: " << steps << ", ";
-    std::cout << "res: " << res << "\n";
+    std::cout << "res: " << res << ", ";
+    std::cout << "dt: " << dt << "\n";
 
     // Read particle data
     std::vector<std::vector<std::tuple<double, double, double>>> particles(steps/res, std::vector<std::tuple<double, double, double>>(N));
     for (size_t step = 0; step < steps/res; ++step) {
         for (size_t i = 0; i <= N; ++i) {
-            if (i != N) {
+            if (i != N ) {
                 if (!std::getline(inputFile, line)) {
                     std::cerr << "Error: Insufficient particle data.\n";
                     return 1;
@@ -173,6 +175,7 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 std::getline(inputFile, line);
+                std::getline(inputFile, line);
             }
         }
     }
@@ -182,14 +185,13 @@ int main(int argc, char* argv[]) {
 
     // Calculate normalized pair density for all radii
     int cube_root = static_cast<int>(std::ceil(std::cbrt(N)));
-    int cube_number = cube_root * cube_root * cube_root;
 
     // Calculate the lattice spacing
     double ringsize = system_size / (cube_root*ring_size);
 
     std::cout << "ringsize: " << ringsize << ", ";
     std::vector<double> results;
-    double system_limit = max_ring*system_size/2;
+    double system_limit = system_size;
     std::cout << "system_limit: " << system_limit << ", ";
     results = calculateNormalizedPairDensity(particles, ringsize, steps/res, N, system_size, system_limit);
     
