@@ -53,9 +53,6 @@ std::vector<Vec3> cubicLattice(int N, float system_size) {
     return positions;
 }
 
-
-
-// verlet algorithm to solve the system
 int main(int argc, char *argv[]) {
     // parameters
     float system_size, T_init, dt;

@@ -187,4 +187,4 @@ if __name__ == "__main__":
     #save_binning_variance_plot(analysis_results)
     binning_plot(potential_energies)
     #plot_energy(potential_energies)
-    plot_means(potential_energies,5000,120)
+    plot_means(potential_energies,5000,27000)

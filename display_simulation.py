@@ -118,7 +118,7 @@ def plot_energies(filename):
 
 
 if __name__ == '__main__':
-    filename = 'MCdata.txt'
-    #filename = 'data.txt'
+    #filename = 'MCdata.txt'
+    filename = 'data.txt'
     plot_data(filename)
-    #plot_energies(filename)
+    plot_energies(filename)
