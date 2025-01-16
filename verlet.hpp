@@ -254,6 +254,16 @@ class System{
         adjacent_atoms.insert(adjacent_atoms.end(),neighbors.begin(),neighbors.end());
         return neighbors;
     }
+    inline std::vector<int> getAdjacentAtoms(Vec3 position) const{
+		int cell_index = getCell(position);
+    	std::vector<int> adjacent_atoms;
+        for (int atom : getAtomsInCell(cell_index)) {
+        	adjacent_atoms.push_back(atom);
+        }
+        std::vector<int> neighbors = getAtomsInNeighboringCells(cell_index);
+        adjacent_atoms.insert(adjacent_atoms.end(),neighbors.begin(),neighbors.end());
+        return neighbors;
+    }
 	void show_neighboring_cells(int cell_index){
 		std::vector<int> neighbors = getNeighboringCells(cell_index);
         std::cout << "Neighboring cells of cell " << cell_index << " are: ";

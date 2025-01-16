@@ -1,4 +1,5 @@
 #include "verlet.hpp"
+#include <cstring>
 #include <chrono>
 #include <fstream>
 
@@ -37,9 +38,8 @@ std::vector<Vec3> randomDist(int N, float system_size,UniformRandomFloat *rd_ptr
     return positions;
 }
 
-std::vector<Vec3> cubicLattice(int N, float system_size, UniformRandomFloat *rd_ptr) {
+std::vector<Vec3> cubicLattice(int N, float system_size) {
     std::vector<Vec3> positions(N, Vec3());
-	UniformRandomFloat &rd = *rd_ptr;
     if (N <= 0) {
         throw std::invalid_argument("Number of atoms (N) must be greater than 0.");
     }
@@ -66,9 +66,9 @@ std::vector<Vec3> cubicLattice(int N, float system_size, UniformRandomFloat *rd_
     for (int i = 0; i < cube_root && count < N; ++i) {
         for (int j = 0; j < cube_root && count < N; ++j) {
             for (int k = 0; k < cube_root && count < N; ++k) {
-                float x = start_position + (i + (1-2*rd())/4) * lattice_spacing;
-                float y = start_position + (j + (1-2*rd())/4) * lattice_spacing;
-                float z = start_position + (k + (1-2*rd())/4) * lattice_spacing;
+                float x = start_position + i * lattice_spacing;
+                float y = start_position + j * lattice_spacing;
+                float z = start_position + k * lattice_spacing;
                 positions[count] = Vec3(x, y, z);
                 count++;
             }
@@ -84,8 +84,9 @@ void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System 
     const std::vector<float> &potentials = atom_system.getPotentialEnergies();
     std::vector<float> new_potentials = potentials;
     float* dpotentials = dpotentials_ptr;
-    int cell_index = atom_system.getCell(new_position);
     float sum_of_new_potentials = sum_of_potentials;
+    /*
+    int cell_index = atom_system.getCell(new_position);
     int box_N = atom_system.getBoxN();
     if (cell_index < 0 || cell_index >= box_N * box_N * box_N) {
         std::cout << new_position.getX() << " " << new_position.getY() << " " << new_position.getZ() << std::endl;
@@ -110,6 +111,27 @@ void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System 
         	sum_of_new_potentials += dpotentials[i];
         }
     }
+     */
+    for (int i : atom_system.getAdjacentAtoms(new_position)) {
+        if (i != atom_idx) {
+            Vec3 position = atom_system.getAtom(i).getPosition();
+            Vec3 diff_new = PeriodicDifference(new_position, position, system_size);
+            new_potentials[i] = LennardJones(diff_new.norm2())/2;
+            dpotentials[atom_idx] += new_potentials[i];
+            dpotentials[i] = new_potentials[i] - potentials[i];
+            sum_of_new_potentials += dpotentials[i];
+        }
+    }
+    dpotentials[atom_idx] -= potentials[atom_idx];
+    for (int i : atom_system.getAdjacentAtoms(atom_idx)) {
+    	if (i != atom_idx) {
+			Vec3 position = atom_system.getAtom(i).getPosition();
+        	Vec3 diff_old = PeriodicDifference(atom_system.getAtom(atom_idx).getPosition(), position, system_size);
+        	new_potentials[i] = LennardJones(diff_old.norm2())/2;
+        	dpotentials[i] = new_potentials[i] - potentials[i];
+        	sum_of_new_potentials += dpotentials[i];
+        }
+    }
     *acceptance_ptr = std::exp(-(sum_of_new_potentials-sum_of_potentials) / T);
 }
 
@@ -118,6 +140,7 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     System &atom_system = *atom_system_ptr;
     UniformRandomFloat &rd = *rd_ptr;
     float &sum_of_potentials = *sum_of_potentials_ptr;
+    const int &N = atom_system.getN();
     const std::vector<float> &potential = atom_system.getPotentialEnergies();
     const float system_size = atom_system.getSystemSize();
     const Vec3 position = atom_system.getAtom(atom_idx).getPosition();
@@ -128,13 +151,14 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     std::vector<float> dpotentials;
     dpotentials.reserve(atom_system.getN());
      */
-    float* dpotentials = new float[atom_system.getN()];
+    float* dpotentials = new float[N];
+    memset(dpotentials, 0, N*sizeof(float));
     acceptanceRate(&acceptance_rate, dpotentials ,atom_system, sum_of_potentials, atom_idx, prop_position, T);
     int &Naccept = *Naccept_ptr;
     if (rd() < acceptance_rate) {
         atom_system.updatePosition(atom_idx, prop_position);
         std::vector<float> new_potentials = potential;
-        for (int i = 0; i < atom_system.getN(); i++) {
+        for (int i = 0; i < N; i++) {
             new_potentials[i] += dpotentials[i];
             sum_of_potentials += dpotentials[i];
         }
@@ -154,8 +178,8 @@ void MC_sweep(System *atom_system_ptr, float *sum_of_potentials_ptr, UniformRand
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 7) {
-        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [seed]" << std::endl;
+    if (argc != 8) {
+        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [seed] [runup]" << std::endl;
         return -1;
     }
     // parameters
@@ -165,23 +189,42 @@ int main(int argc, char *argv[]) {
     int sweeps = atoi(argv[4]);
     float dr = atof(argv[5]);
     int seed = atoi(argv[6]);
+    int runup = atoi(argv[7]);
     UniformRandomFloat random(seed);
     std::vector<Vec3> positions(N, Vec3()), velocities(N, Vec3());
-    //positions = randomDist(N, system_size, &random);
-    positions = cubicLattice(N, system_size, &random);
+    positions = cubicLattice(N, system_size);
+    initialize_vs();
     System atom_system(system_size, positions, velocities, T_init);
     // start the timer
     auto start = std::chrono::high_resolution_clock::now();
     float potentialEnergies = atom_system.computePotentialEnergy();
+    std::cout << "Initial potential energy: " << potentialEnergies << std::endl;
     std::ofstream file("MCdata.txt");
-    file << system_size << "\n" <<  N <<  "\n" << sweeps << "\n" << 1 << "\n";
-	/*
-    float dummy_potential = 0;
-    int runup = 15000, dummy = 0;
+    file << system_size << "\n" << T_init << "\n" <<  N <<  "\n" << sweeps << "\n" << 1 << "\n" << 1 << "\n";
     for (int i = 0; i < runup; i++) {
-        MC_sweep(&atom_system, &dummy_potential, &random, dr, T_init, &dummy);
+    	int Naccept = 0;
+        MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
+        float acceptance_rate = static_cast<float>(Naccept)/(N);
+        if (acceptance_rate < 0.15 && dr > 0.1) {
+        	dr *= 0.9;
+        }
+        else if (acceptance_rate > 0.25 && dr < system_size/2) {
+        	dr *= 1.1;
+        }
+        if (i % (runup/50) == 0) {
+            int barWidth = 50;
+            std::cout << "[";
+            int pos = barWidth * i / runup;
+            for (int j = 0; j < barWidth; ++j) {
+                if (j < pos) std::cout << "=";
+                else if (j == pos) std::cout << ">";
+                else std::cout << " ";
+            }
+            std::cout << "] " << 2*int(i * 50 / runup) << " %\r";
+            std::cout.flush();
+        }
     }
-	 */
+    std::cout << "[" << std::string(50, '=') << "] 100%\n";
     int global_Naccept = 0;
     for (int i = 0; i < sweeps; i++) {
         if (potentialEnergies != potentialEnergies) {
@@ -193,10 +236,10 @@ int main(int argc, char *argv[]) {
         float acceptance_rate = static_cast<float>(Naccept)/(N);
         global_Naccept += Naccept;
         // adjusst dr, such that an acceptance rate of 20% is achieved
-        if (acceptance_rate < 0.15 && dr > 0.00001) {
+        if (acceptance_rate < 0.15 && dr > 0.1) {
         	dr *= 0.9;
         }
-        else if (acceptance_rate > 0.25 && dr < system_size/2) {
+        else if (acceptance_rate > 0.25 && dr < 2.5) {
         	dr *= 1.1;
         }
         if (i % (sweeps/50) == 0) {
@@ -212,12 +255,12 @@ int main(int argc, char *argv[]) {
             std::cout.flush();
         }
         /*
-        for (int j = 0; j < N; j++) {
+		for (int j = 0; j < N; j++) {
             Vec3 position = atom_system.getAtom(j).getPosition();
-            file << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
+        	file << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
         }
-        */
-        file << potentialEnergies << " " << 0 << std::endl;
+         */
+        file << potentialEnergies << std::endl;
     }
     std::cout << "[" << std::string(50, '=') << "] 100%\n";
     file.close();
@@ -225,14 +268,7 @@ int main(int argc, char *argv[]) {
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<float> elapsed_seconds = stop-start;
     std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
-    std::cout << "Energy Data written to MCdata.txt\n";
-    // write the final positions to a file
-    std::ofstream initial_positions("initial_positions.txt");
-    for (int i = 0; i < N; i++) {
-        Vec3 position = atom_system.getAtom(i).getPosition();
-        initial_positions << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
-    }
-    initial_positions.close();
-    std::cout << "Initial positions written to initial_positions.txt\n";
+    std::cout << "Energy and Position Data written to MCdata.txt\n";
+    std::cout << "Final potential energy: " << potentialEnergies << std::endl;
     return 0;
 }
