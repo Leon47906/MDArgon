@@ -1,3 +1,5 @@
+#ifndef VERLET_HPP
+#define VERLET_HPP
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -5,26 +7,24 @@
 #include <random>
 #include <algorithm>
 #include <fstream>
-#include <omp.h>
 #include <numeric>
 #include <math.h>
-#include "fastinversesquareroot.hpp"
 #include <chrono>
 
-#ifndef VERLET_HPP
-#define VERLET_HPP
+// Konstanten
 
-constexpr float kB = 1.38064852e-23;
-constexpr float nm = 1e-9;//nanometer
-constexpr float ns = 1e-9;//nanosecond
-constexpr float fs = 1e-15;//femtosecond
-constexpr float Dalton = 1.66053906660e-27;//Dalton in kg
-constexpr float Sigma = 0.33916; //Sigma in nm
-constexpr float Epsilon = 137.9; //Epsilon in kB*K
-constexpr float shift = -0.016316891136;
-constexpr float Mass = 39.948; //Mass in Dalton
+constexpr float kB = 1.38064852e-23; // Boltzmann constant
+constexpr float nm = 1e-9; // nanometer
+constexpr float ns = 1e-9; // nanosecond
+constexpr float fs = 1e-15; // femtosecond
+constexpr float Dalton = 1.66053906660e-27; //Dalton in kg
+constexpr float Sigma = 0.33916; // Sigma in nm
+constexpr float Epsilon = 137.9; // Epsilon in kB*K
+constexpr float shift = -0.016316891136; // potential shift
+constexpr float Mass = 39.948; // mass of Argon in Dalton
 constexpr float one_over_sqrt_pi = 0.5*M_2_SQRTPI;
 
+// Potential
 
 inline float LennardJones(const float& r2) {
 	if (r2 > 6.25) return 0;
@@ -32,14 +32,16 @@ inline float LennardJones(const float& r2) {
     return 4.0/r6*(1.0/r6 - 1.0)-shift;
 }
 
+// Beschleunigung
+
 inline float ComputeAccel(const float& r2) {
     if (r2 > 6.25) return 0;
-    else {
-    	float r6 = r2*r2*r2;
-        float r8 = r6*r2;
-        return 24.0 / r8 * (2.0/r6 - 1.0);
-    }
+    float r6 = r2 * r2 * r2;
+    float r8 = r6 * r2;
+    return 24.0 / r8 * (2.0 / r6 - 1.0);
 }
+
+// Zufallszahlengenerator
 
 class UniformRandomFloat{
     std::random_device rd;
@@ -47,15 +49,16 @@ class UniformRandomFloat{
     std::uniform_real_distribution<float> dis;
     public:
     UniformRandomFloat() : gen(rd()), dis(0, 1) {}
-    UniformRandomFloat(const int& seed) : gen(seed), dis(0, 1) {}
+    explicit UniformRandomFloat(const int& seed) : gen(seed), dis(0, 1) {}
     float operator()() {
         return dis(gen);
     }
 };
 
-class Vec3{
+// Dreiervektor
+
+struct Vec3{
 	float x, y, z;
-    public:
 	Vec3() : x(0), y(0), z(0) {}
 	Vec3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
 	Vec3(const Vec3& v) : x(v.x), y(v.y), z(v.z) {}
@@ -66,7 +69,7 @@ class Vec3{
         return *this;
     }
     Vec3 operator+(const Vec3& v) const {
-        return Vec3(x + v.x, y + v.y, z + v.z);
+        return {x + v.x, y + v.y, z + v.z};
     }
     Vec3& operator+=(const Vec3& v) {
         x += v.x;
@@ -75,7 +78,7 @@ class Vec3{
         return *this;
     }
     Vec3 operator-(const Vec3& v) const {
-        return Vec3(x - v.x, y - v.y, z - v.z);
+        return {x - v.x, y - v.y, z - v.z};
     }
     Vec3& operator-=(const Vec3& v) {
         x -= v.x;
@@ -84,7 +87,7 @@ class Vec3{
         return *this;
     }
     Vec3 operator*(float s) const {
-        return Vec3(x * s, y * s, z * s);
+        return {x * s, y * s, z * s};
     }
     friend Vec3 operator*(float s, const Vec3& v) {
         return v * s;
@@ -93,40 +96,41 @@ class Vec3{
 		if (s == 0) {
 			throw std::invalid_argument("Division by zero.");
 		}
-		return Vec3(x / s, y / s, z / s);
+		return {x / s, y / s, z / s};
 	}
 	friend Vec3 operator/(float s, const Vec3& v) {
 		return v / s;
 	}
-    float getX() const { return x; }
-    float getY() const { return y; }
-    float getZ() const { return z; }
-    float norm2() const { return x*x + y*y + z*z; }
-    Vec3 Zero() const { return Vec3(0, 0, 0); }
+    [[nodiscard]] float norm2() const { return x*x + y*y + z*z; }
+    static Vec3 Zero() { return {0, 0, 0}; }
 };
 
 inline float dot(const Vec3& v1, const Vec3& v2) {
-    return v1.getX() * v2.getX() + v1.getY() * v2.getY() + v1.getZ() * v2.getZ();
+    return v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z();
 }
 
 const static std::vector<Vec3> unit_velocities{Vec3(1,0,0), Vec3(0,1,0), Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,-1,0), Vec3(0,0,-1)};
 
+// Periodische Randbedingungen
+
 inline Vec3 PeriodicDifference(const Vec3& r1,const Vec3& r2, const float& period) {
         const Vec3 r = r1 - r2;
-        float x = r.getX();
-        float y = r.getY();
-        float z = r.getZ();
+        float x = r.x();
+        float y = r.y();
+        float z = r.z();
         x -= period * std::round(x / period);
         y -= period * std::round(y / period);
         z -= period * std::round(z / period);
         return Vec3(x, y, z);
     }
 
+// Atom Klasse
+
 class Atom{
 	Vec3 position, velocity;
     public:
     Atom() : position(Vec3()), velocity(Vec3()) {}
-    Atom(const Vec3 _position, const Vec3 _velocity) : position(_position), velocity(_velocity) {}
+    Atom(const Vec3& _position, const Vec3& _velocity) : position(_position), velocity(_velocity) {}
     Atom(const Atom& other) : position(other.position), velocity(other.velocity) {}
     Atom& operator=(const Atom& other) {
         if (this != &other) {
@@ -144,9 +148,11 @@ class Atom{
     void setVelocity(const Vec3& velocity) { this->velocity = velocity; }
 };
 
+// System Klasse
+
 class System{
-    float system_size, N, virial;
-    int box_N=std::ceil(system_size/2.5);
+    float system_size, virial;
+    int box_N=std::ceil(system_size/2.5), N;
     float box_L=system_size/box_N;
     std::vector<std::vector<int>> cells;
     std::vector<Atom> atoms;
@@ -165,9 +171,9 @@ class System{
             Vec3 velocity = _velocities[i];
             atoms.push_back(Atom(position, velocity));
             int index = 0;
-            index += std::floor(position.getX() / box_L);
-            index += std::floor(position.getY() / box_L) * box_N;
-            index += std::floor(position.getZ() / box_L) * box_N * box_N;
+            index += std::floor(position.x() / box_L);
+            index += std::floor(position.y() / box_L) * box_N;
+            index += std::floor(position.z() / box_L) * box_N * box_N;
             cells[index].push_back(i);
         }
     }
@@ -186,30 +192,31 @@ class System{
         }
         return *this;
     }
-    inline int getN() const { return N; }
-    inline std::vector<Atom> getAtoms() const { return atoms; }
-    inline int getBoxN() const { return box_N; }
-    inline std::vector<std::vector<int>> getCells() const { return cells; }
-    inline float getSystemSize() const { return system_size; }
-    inline float getPotentialEnergy() const {
+    int getN() const { return N; }
+    std::vector<Atom> getAtoms() const { return atoms; }
+    int getBoxN() const { return box_N; }
+    std::vector<std::vector<int>> getCells() const { return cells; }
+    float getSystemSize() const { return system_size; }
+    float getPotentialEnergy() const {
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
-    inline std::vector<float> getPotentialEnergies() const { return E_pot; }
-    inline void updatePotentialEnergies(const std::vector<float>& new_potentials) {
+    std::vector<float> getPotentialEnergies() const { return E_pot; }
+    void updatePotentialEnergies(const std::vector<float>& new_potentials) {
         	E_pot = new_potentials;
     }
-    // I want to implement a function, that give me the indices of the neighboring cells
-    inline int getCell(Vec3 position) const {
+    // Funktion, welche die Zelle eines Atoms bestimmt
+    int getCell(Vec3 position) const {
         int index = 0;
-        index += std::floor(position.getX() / box_L);
-        index += std::floor(position.getY() / box_L) * box_N;
-        index += std::floor(position.getZ() / box_L) * box_N * box_N;
+        index += std::floor(position.x() / box_L);
+        index += std::floor(position.y() / box_L) * box_N;
+        index += std::floor(position.z() / box_L) * box_N * box_N;
         return index;
     }
-    inline Atom getAtom(int atom_index) const {
+    Atom getAtom(int atom_index) const {
         return atoms[atom_index];
     }
-    inline std::vector<int> getNeighboringCells(int cell_index) const {
+    // Funktion, welche die Nachbarzellen einer Zelle bestimmt
+    std::vector<int> getNeighboringCells(int cell_index) const {
         std::vector<int> neighbors;
         int x = cell_index % box_N;
         int y = (cell_index / box_N) % box_N;
@@ -225,15 +232,16 @@ class System{
                 }
             }
         }
-        //return the sorted list of neighbors
         std::sort(neighbors.begin(), neighbors.end());
         neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
         return neighbors;
     }
-    inline std::vector<int> getAtomsInCell(int cell_index) const {
+    // Funktion, welche die Indizes der Atome in einer Zelle zurückgibt
+    std::vector<int> getAtomsInCell(int cell_index) const {
         return cells[cell_index];
     }
-    inline std::vector<int> getAtomsInNeighboringCells(int cell_index) const {
+    // Funktion, welche die Indizes der Atome in den Nachbarzellen einer Zelle zurückgibt
+    std::vector<int> getAtomsInNeighboringCells(int cell_index) const {
         std::vector<int> neighbors = getNeighboringCells(cell_index);
         std::vector<int> atoms_in_neighbors;
         for (int neighbor : neighbors) {
@@ -242,7 +250,8 @@ class System{
         }
         return atoms_in_neighbors;
     }
-    inline std::vector<int> getAdjacentAtoms(int atom_index) const{
+    // Funktion, welche die Indizes der Atome zurückgibt, die mit einem Atom in Wechselwirkung stehen
+    std::vector<int> getAdjacentAtoms(int atom_index) const{
 		int cell_index = getCell(atoms[atom_index].getPosition());
     	std::vector<int> adjacent_atoms;
         for (int atom : getAtomsInCell(cell_index)) {
@@ -254,17 +263,18 @@ class System{
         adjacent_atoms.insert(adjacent_atoms.end(),neighbors.begin(),neighbors.end());
         return neighbors;
     }
-    inline std::vector<int> getAdjacentAtoms(Vec3 position) const{
-		int cell_index = getCell(position);
-    	std::vector<int> adjacent_atoms;
+    std::vector<int> getAdjacentAtoms(const Vec3& position) const {
+        const int cell_index = getCell(position);
+        std::vector<int> adjacent_atoms;
         for (int atom : getAtomsInCell(cell_index)) {
-        	adjacent_atoms.push_back(atom);
+            adjacent_atoms.push_back(atom);
         }
         std::vector<int> neighbors = getAtomsInNeighboringCells(cell_index);
-        adjacent_atoms.insert(adjacent_atoms.end(),neighbors.begin(),neighbors.end());
-        return neighbors;
+        adjacent_atoms.insert(adjacent_atoms.end(), neighbors.begin(), neighbors.end());
+        return adjacent_atoms;
     }
-	void show_neighboring_cells(int cell_index){
+    // Debugging Funktionen
+	void show_neighboring_cells(int cell_index) const{
 		std::vector<int> neighbors = getNeighboringCells(cell_index);
         std::cout << "Neighboring cells of cell " << cell_index << " are: ";
         for (int neighbor : neighbors) {
@@ -272,7 +282,7 @@ class System{
         }
         std::cout << std::endl;
 	}
-    void show_adjacent_atoms(int atom_index) {
+    void show_adjacent_atoms(int atom_index) const {
 		std::vector<int> adjacent_atoms = getAdjacentAtoms(atom_index);
         std::cout << "Adjacent atoms of atom " << atom_index << " are: ";
         for (int atom : adjacent_atoms) {
@@ -280,27 +290,27 @@ class System{
         }
         std::cout << std::endl;
     }
-    void display() {
+    void display() const {
         for (int i = 0; i < N; i++) {
-            std::cout << "Atom " << i << " position: " << atoms[i].getPosition().getX() << " "
-                      << atoms[i].getPosition().getY() << " " << atoms[i].getPosition().getZ() << std::endl;
-            std::cout << "Atom " << i << " velocity: " << atoms[i].getVelocity().getX() << " "
-                      << atoms[i].getVelocity().getY() << " " << atoms[i].getVelocity().getZ() << std::endl;
+            std::cout << "Atom " << i << " position: " << atoms[i].getPosition().x() << " "
+                      << atoms[i].getPosition().y() << " " << atoms[i].getPosition().z() << std::endl;
+            std::cout << "Atom " << i << " velocity: " << atoms[i].getVelocity().x() << " "
+                      << atoms[i].getVelocity().y() << " " << atoms[i].getVelocity().z() << std::endl;
         }
     }
-
-    inline Vec3 PeriodicPositionUpdate(const Vec3& position, const Vec3& velocity, const float& dt) const {
+    // Funktion, welche die Position eines Atoms transformiert, um periodische Randbedingungen zu berücksichtigen
+    Vec3 PeriodicPositionUpdate(const Vec3& position, const Vec3& velocity, const float& dt) const {
         Vec3 new_position = position + velocity * dt;
-        float x = new_position.getX();
-        float y = new_position.getY();
-        float z = new_position.getZ();
+        float x = new_position.x();
+        float y = new_position.y();
+        float z = new_position.z();
         x = std::fmod(x + system_size, system_size);
         y = std::fmod(y + system_size, system_size);
         z = std::fmod(z + system_size, system_size);
         return Vec3(x, y, z);
     }
+    // Funktion, welche die Beschleunigungen der Atome aufgrund der Lennard-Jones-Kräfte berechnet
     void computeAccels() {
-      	// Reset accelerations, potential energies and virial
         std::fill(accels.begin(), accels.end(), Vec3());
         std::fill(E_pot.begin(), E_pot.end(), 0);
         virial = 0;
@@ -309,17 +319,17 @@ class System{
             const std::vector<int>& neighboring_cells = getNeighboringCells(cell);
             if (cell_atoms.empty()) continue;
             // Compute interactions within the same cell
-            int N = cell_atoms.size();
+            const int N = cell_atoms.size();
             for (int i = 0; i < N; i++) {
                 for (int j = i + 1; j < N; j++) {
-                    int atom_i = cell_atoms[i];
-                    int atom_j = cell_atoms[j];
+                    const int atom_i = cell_atoms[i];
+                    const int atom_j = cell_atoms[j];
                     Vec3 ri = atoms[atom_i].getPosition();
                     Vec3 rj = atoms[atom_j].getPosition();
                     Vec3 r = ri - rj;
                     float r2 = r.norm2();
-                    Vec3 accel = r*ComputeAccel(r2);
-                    float pot = LennardJones(r2);
+                    Vec3 accel = r * ComputeAccel(r2);
+                    const float pot = LennardJones(r2);
                     accels[atom_i] += accel;
                     accels[atom_j] -= accel; // Newton's Third Law
                     // Lennard Jones potential
@@ -329,14 +339,14 @@ class System{
                 }
             }
             // Compute interactions with neighboring cells
-            for (int neighbor_cell : neighboring_cells) {
+            for (const int neighbor_cell : neighboring_cells) {
                 const std::vector<int>& neighbor_atoms = cells[neighbor_cell];
-                for (int atom_i : cell_atoms) {
-                    for (int atom_j : neighbor_atoms) {
+                for (const int atom_i : cell_atoms) {
+                    for (const int atom_j : neighbor_atoms) {
                         Vec3 r = PeriodicDifference(atoms[atom_i].getPosition(), atoms[atom_j].getPosition(),system_size);
                         float r2 = r.norm2();
-                        Vec3 accel = r*ComputeAccel(r2);
-                        float pot = LennardJones(r2);
+                        Vec3 accel = r * ComputeAccel(r2);
+                        const float pot = LennardJones(r2);
                         accels[atom_i] += accel;
                         E_pot[atom_i] += pot/2;
                         virial += r2*accel.norm2();
@@ -351,14 +361,15 @@ class System{
             for (int j = i + 1; j < N; j++) {
                 Vec3 r = PeriodicDifference(atoms[i].getPosition(), atoms[j].getPosition(), system_size);
                 float r2 = r.norm2();
-                float pot = LennardJones(r2);
+                const float pot = LennardJones(r2);
                 E_pot[i] += pot/2;
                 virial += r2*ComputeAccel(r2);
             }
         }
         return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
     }
-	inline void update_positions(float dt){
+    // Funktion, welche die Positionen der Atome aktualisiert
+	void update_positions(const float& dt){
 		for (int i = 0; i < N; i++) {
         	Vec3 position = atoms[i].getPosition();
             Vec3 velocity = atoms[i].getVelocity();
@@ -367,7 +378,8 @@ class System{
             atoms[i].setPosition(position);
     	}
     }
-    inline void update_velocities(float dt){
+    // Funktion, welche die Geschwindigkeiten der Atome aktualisiert
+    void update_velocities(const float& dt){
     	for (int i = 0; i < N; i++) {
         	Vec3 velocity = atoms[i].getVelocity();
             Vec3 accel = accels[i];
@@ -377,19 +389,23 @@ class System{
             E_kin[i] = 0.5 * v2;
         }
     }
-    inline void update(float dt){
+    // Funktion, welche einen Zeitschritt des Verlet-Algorithmus durchführt
+    void update(const float dt){
     	update_positions(dt);
         computeAccels();
         update_velocities(dt);
     }
-    inline std::vector<Vec3> getData() {
+    // Funktion, welche die Daten der Atome zurückgibt
+    std::vector<Vec3> getData() const {
         std::vector<Vec3> data(N, Vec3());
         for (int i = 0; i < N; i++) {
 			data[i] = atoms[i].getPosition();
         }
         return data;
     }
-    void run(int steps, float dt, char *filename, int resolution) {
+    // Funktion, welche die Simulation durchführt und die Daten in eine Datei schreibt
+    void run(const int& steps, const float& dt, const char *filename,
+             const int& resolution) {
         std::ofstream file(filename);
         file << system_size * Sigma * nm << "\n" << T_init * Epsilon << "\n" << N <<  "\n" << steps << "\n" << resolution << "\n" << dt << "\n";
     	std::vector<Vec3> data(N, Vec3());
@@ -397,19 +413,19 @@ class System{
         //calculation of v1/2
         computeAccels();
         update_velocities(dt/2);
-        //simulation
-        const int barWidth = 70;
+        // simulation
+        constexpr int barWidth = 70;
     	for (int i = 0; i < steps; i++) {
             // print the progress every percent
             if (i % (steps/100) == 0) {
                 std::cout << "[";
-                int pos = barWidth * i / steps;
+                const int pos = barWidth * i / steps;
                 for (int j = 0; j < barWidth; ++j) {
                     if (j < pos) std::cout << "=";
                     else if (j == pos) std::cout << ">";
                     else std::cout << " ";
                 }
-                std::cout << "] " << int(i * 100.0 / steps) << " %\r";
+                std::cout << "] " << static_cast<int>(i * 100.0 / steps) << " %\r";
                 std::cout.flush();
             }
         	update(dt);
@@ -423,7 +439,7 @@ class System{
             }
             if (i % resolution == 0) {
                 for (int j = 0; j < N; j++) {
-                    file << data[j].getX() * Sigma * nm << " " << data[j].getY() * Sigma * nm << " " << data[j].getZ() * Sigma * nm << "\n";
+                    file << data[j].x() * Sigma * nm << " " << data[j].y() * Sigma * nm << " " << data[j].z() * Sigma * nm << "\n";
                 }
                 file << energies[0] << " " << energies[1] << "\n";
                 file << virial << std::endl;
@@ -432,7 +448,8 @@ class System{
         file.close();
         std::cout << "[" << std::string(barWidth, '=') << "] 100%\n";
     }
-    inline void updatePosition(int atom_idx, Vec3 position) {
+    // Funktion, welche die Position eines Atoms aktualisiert
+    void updatePosition(int atom_idx, Vec3 position) {
         atoms[atom_idx].setPosition(position);
     }
 };

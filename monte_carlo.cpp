@@ -77,6 +77,7 @@ std::vector<Vec3> cubicLattice(int N, float system_size) {
     return positions;
 }
 
+// Funktion, welche die Akzeptanzrate berechnet
 
 void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System &atom_system, const float &sum_of_potentials, const int &atom_idx, const Vec3 &new_position, const float &T) {
     const int N = atom_system.getN();
@@ -85,33 +86,6 @@ void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System 
     std::vector<float> new_potentials = potentials;
     float* dpotentials = dpotentials_ptr;
     float sum_of_new_potentials = sum_of_potentials;
-    /*
-    int cell_index = atom_system.getCell(new_position);
-    int box_N = atom_system.getBoxN();
-    if (cell_index < 0 || cell_index >= box_N * box_N * box_N) {
-        std::cout << new_position.getX() << " " << new_position.getY() << " " << new_position.getZ() << std::endl;
-        std::cerr << "Error: Cell index " << cell_index <<" out of bounds" << std::endl;
-        exit(1);
-    }
-    for (int i : atom_system.getAtomsInCell(cell_index)) {
-    	 if (i != atom_idx) {
-            Vec3 position = atom_system.getAtom(i).getPosition();
-            Vec3 diff_new = PeriodicDifference(new_position, position, system_size);
-            new_potentials[i] = LennardJones(diff_new.norm2());
-            dpotentials[i] = new_potentials[i] - potentials[i];
-            sum_of_new_potentials += dpotentials[i];
-        }
-    }
-    for (int i : atom_system.getAtomsInNeighboringCells(cell_index)) {
-      	if (i != atom_idx) {
-        	Vec3 position = atom_system.getAtom(i).getPosition();
-        	Vec3 diff_new = PeriodicDifference(new_position, position, system_size);
-        	new_potentials[i] = LennardJones(diff_new.norm2());
-        	dpotentials[i] = new_potentials[i] - potentials[i];
-        	sum_of_new_potentials += dpotentials[i];
-        }
-    }
-     */
     for (int i : atom_system.getAdjacentAtoms(new_position)) {
         if (i != atom_idx) {
             Vec3 position = atom_system.getAtom(i).getPosition();
@@ -135,6 +109,8 @@ void acceptanceRate(float* acceptance_ptr, float* dpotentials_ptr, const System 
     *acceptance_ptr = std::exp(-(sum_of_new_potentials-sum_of_potentials) / T);
 }
 
+// Funktion, welche einen Monte-Carlo-Schritt durchführt
+
 void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &atom_idx, UniformRandomFloat *rd_ptr, const float &dr, const float &T
              , int *Naccept_ptr) {
     System &atom_system = *atom_system_ptr;
@@ -147,10 +123,6 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     const Vec3 displacement = dr/std::sqrt(3) * Vec3(2*rd()-1, 2*rd()-1, 2*rd()-1);
     const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
     float acceptance_rate;
-    /*
-    std::vector<float> dpotentials;
-    dpotentials.reserve(atom_system.getN());
-     */
     float* dpotentials = new float[N];
     memset(dpotentials, 0, N*sizeof(float));
     acceptanceRate(&acceptance_rate, dpotentials ,atom_system, sum_of_potentials, atom_idx, prop_position, T);
@@ -168,6 +140,8 @@ void MC_step(System *atom_system_ptr, float *sum_of_potentials_ptr, const int &a
     delete[] dpotentials;
 }
 
+// Funktion, welche einen Monte-Carlo-Sweep durchführt
+
 void MC_sweep(System *atom_system_ptr, float *sum_of_potentials_ptr, UniformRandomFloat *rd_ptr, const float &dr
               , const float &T, int *Naccept_ptr) {
     System &atom_system = *atom_system_ptr;
@@ -176,6 +150,8 @@ void MC_sweep(System *atom_system_ptr, float *sum_of_potentials_ptr, UniformRand
         MC_step(&atom_system, sum_of_potentials_ptr, i, rd_ptr, dr, T, Naccept_ptr);
     }
 }
+
+// Hauptprogramm
 
 int main(int argc, char *argv[]) {
     if (argc != 8) {
@@ -205,6 +181,7 @@ int main(int argc, char *argv[]) {
     	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
         float acceptance_rate = static_cast<float>(Naccept)/(N);
+        // automatische Steuerung von dr
         if (acceptance_rate < 0.15 && dr > 0.1) {
         	dr *= 0.9;
         }
@@ -254,12 +231,6 @@ int main(int argc, char *argv[]) {
             std::cout << "] " << 2*int(i * 50 / sweeps) << " % " << static_cast<float>(global_Naccept)/(N*(i+1)) << " " << dr << "\r";
             std::cout.flush();
         }
-        /*
-		for (int j = 0; j < N; j++) {
-            Vec3 position = atom_system.getAtom(j).getPosition();
-        	file << position.getX() << " " << position.getY() << " " << position.getZ() << "\n";
-        }
-         */
         file << potentialEnergies << std::endl;
     }
     std::cout << "[" << std::string(50, '=') << "] 100%\n";

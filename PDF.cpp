@@ -10,23 +10,6 @@
 #include <omp.h>
 #include "verlet.hpp"
 
-// Periodic boundary conditions
-inline Vec3 PeriodicDifference(const Vec3& r1,const Vec3& r2, const double& period) {
-        const Vec3 r = r1 - r2;
-        double x = r.getX();
-        double y = r.getY();
-        double z = r.getZ();
-        while (x > period * 0.5) x -= period;
-        while (x < -period * 0.5) x += period;
-
-        while (y > period * 0.5) y -= period;
-        while (y < -period * 0.5) y += period;
-
-        while (z > period * 0.5) z -= period;
-        while (z < -period * 0.5) z += period;
-        return Vec3(x, y, z);
-}
-
 // Function to calculate pairs in 3D with multithreading support
 std::vector<double> calculateNormalizedPairDensity(
     const std::vector<std::vector<std::tuple<double, double, double>>>& particles, double ringsize, 
@@ -47,22 +30,6 @@ std::vector<double> calculateNormalizedPairDensity(
 
         for (size_t i = 0; i < N; ++i) {
             for (size_t j = i+1; j < N; ++j) {
-                /*
-                Vec3 dr = PeriodicDifference(
-                    Vec3(std::get<0>(particles[step][i]), std::get<1>(particles[step][i]), std::get<2>(particles[step][i])),
-                    Vec3(std::get<0>(particles[step][j]), std::get<1>(particles[step][j]), std::get<2>(particles[step][j])),
-                    system_size
-                );
-
-                double distanceSquared = dr.norm2();
-                double distance = std::sqrt(distanceSquared);
-                size_t ring = std::floor(distance / ringsize);
-
-                if (ring < num_rings) {
-                    local_counts[ring]++;
-                }
-                
-                *//**/
                 // Calculate the distance between the particles for periodic boundary conditions
                 Vec3 dr1 = Vec3(std::get<0>(particles[step][i]), std::get<1>(particles[step][i]), std::get<2>(particles[step][i]));
                 Vec3 dr2 = Vec3(std::get<0>(particles[step][j]), std::get<1>(particles[step][j]), std::get<2>(particles[step][j]));
@@ -73,6 +40,7 @@ std::vector<double> calculateNormalizedPairDensity(
                             double distanceSquared = dr.norm2();
                             double distance = std::sqrt(distanceSquared);
                             size_t ring = std::floor(distance/ringsize);
+                            // Increment the count for the ring
                             if (ring < num_rings) {
                                 local_counts[ring]++;
                             }
@@ -81,6 +49,7 @@ std::vector<double> calculateNormalizedPairDensity(
                 }
             }
         }
+        // Combine the local counts
         #pragma omp critical
         {
         for (size_t i = 0; i < num_rings; ++i) counts[i] += local_counts[i];
@@ -93,8 +62,8 @@ std::vector<double> calculateNormalizedPairDensity(
             }
         } else std::cout << "=";
     }
-    // Reduktion der lokalen Zählwerte#
-    double rho = N / std::pow(system_size, 3); // Teilchendichte
+    // Normalize the counts
+    double rho = N / std::pow(system_size, 3);
     for (size_t i = 0; i < num_rings; ++i) {
         double r = i * ringsize;
         double volume = 4.0 / 3.0 * M_PI * (std::pow((r + ringsize), 3) - std::pow(r, 3));
