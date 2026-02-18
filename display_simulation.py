@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
@@ -99,7 +98,7 @@ def plot_energies(filename):
     time *= resolution/1000 # convert to ps
     # Create plot of energies seperately
     fig, axs = plt.subplots(1,3)
-    fig.set_size_inches(15, 5)
+    fig.set_size_inches(20, 5)
     axs[0].plot(time, e_int, label='Interaction energy')
     axs[0].set_xlabel('Time in ps')
     axs[0].set_ylabel(r'Interaction energy per particle in $\epsilon$')
@@ -111,7 +110,7 @@ def plot_energies(filename):
     axs[2].plot(time, e_int+e_kin, label='Total energy')
     axs[2].set_xlabel('Time in ps')
     axs[2].set_ylabel(r'Total energy per particle in $\epsilon$')
-    plt.title(f'Energy plot for {N} particles, initial temperature {temperature} K, system size {system_size} nm, dt {dt} fs')
+    plt.suptitle(f'Energy plot for {N} particles, initial temperature {temperature} K, system size {system_size} nm, dt {dt} fs')
     plt.savefig('energies.png')
     plt.close()
     print(f"Plot saved as 'energies.png")

@@ -37,4 +37,4 @@ def plot(filename):
     print(f"Plot saved as '{name}.png")
 
 if __name__ == '__main__':
-    plot('potentialEnergies.txt')
+    plot('MCdata.txt')

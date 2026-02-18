@@ -1,10 +1,17 @@
 #include "verlet.hpp"
-#include <fstream>
-#include <chrono>
+#define SYSTEM_SIZE 20
+#define NUM_ATOMS 3000
+#define BOX_N ((10 * SYSTEM_SIZE / 25) + 1)
+#define T_INIT 50
+#define STEPS 100000
+#define DT 1
+#define RESOLUTION 100
 
+using json = nlohmann::json;
 
-std::vector<Vec3> cubicLattice(const int N, const float system_size) {
-    std::vector<Vec3> positions(N, Vec3());
+std::vector<Vec3> cubicLattice(const int N, const double system_size) {
+    std::vector<Vec3> positions;
+    positions.reserve(N);
 
     if (N <= 0) {
         throw std::invalid_argument("Number of atoms (N) must be greater than 0.");
@@ -17,126 +24,63 @@ std::vector<Vec3> cubicLattice(const int N, const float system_size) {
     const int cube_root = static_cast<int>(std::ceil(std::cbrt(N)));
 
     // Calculate the lattice spacing
-    float lattice_spacing = system_size / cube_root;
+    double lattice_spacing = system_size / cube_root;
     if (lattice_spacing <= 0) {
         throw std::runtime_error("Lattice spacing must be greater than 0.");
     }
 
     // Calculate the starting position for the lattice
-    float center = system_size / 2.0;
-    float start_position = center - (lattice_spacing * (cube_root - 1) / 2);
+    double center = system_size / 2.0;
+    double start_position = center - (lattice_spacing * (cube_root - 1) / 2);
 
     // Generate positions on a cubic lattice
     int count = 0;
     for (int i = 0; i < cube_root && count < N; ++i) {
+        double x = start_position + i * lattice_spacing;
         for (int j = 0; j < cube_root && count < N; ++j) {
+            double y = start_position + j * lattice_spacing;
             for (int k = 0; k < cube_root && count < N; ++k) {
-                float x = start_position + i * lattice_spacing;
-                float y = start_position + j * lattice_spacing;
-                float z = start_position + k * lattice_spacing;
-                positions[count] = Vec3(x, y, z);
-                count++;
+                double z = start_position + k * lattice_spacing;
+                positions.emplace_back(x, y, z);
+                if (++count == NUM_ATOMS) break;
             }
+            if (count == NUM_ATOMS) break;
         }
+        if (count == NUM_ATOMS) break;
     }
     return positions;
 }
 
+
 int main(int argc, char *argv[]) {
     // parameters
-    float system_size, T_init, dt;
-    int N, steps, resolution;
-    std::vector<Vec3> positions, velocities;
-    if (argc == 7) {
-      // read the parameters from the command line
-      // system size in Sigma
-      system_size = atof(argv[1]);
-      // number of atoms
-      N = atoi(argv[2]);
-      // initial temperature from K to reduced units
-      T_init = atof(argv[3]) / Epsilon;
-      steps = atoi(argv[4]);
-      // time step from fs to reduced units
-      dt = atof(argv[5]) * fs /
-           std::sqrt(Mass * Dalton * Sigma * Sigma * nm * nm / (Epsilon * kB));
-      resolution = atof(argv[6]);
-      positions.resize(N, Vec3());
-      velocities.resize(N, Vec3());
-      positions = cubicLattice(N, system_size);
-      UniformRandomFloat random(1234);
-      float v0 = std::sqrt(3 * T_init);
-      for (int i = 0; i < N; i++) {
-        velocities[i] = v0 * unit_velocities[std::floor(6 * random())];
-      }
-      // print the distance which one particle with velocity v0 travels in one
-      // time step
-      std::cout << "Distance: " << v0 * dt << std::endl;
-      /*
-      Vec3 v_com = Vec3();
-      for (int i = 0; i < N; i++) {
-          v_com += velocities[i]/N;
-      }
-      for (int i = 0; i < N; i++) {
-          velocities[i] -= v_com;
-      }
-       */
-    } else if (argc == 2) {
-      system_size = 4;
-      N = 1;
-      steps = 10000;
-      dt = 1 * fs /
-           std::sqrt(Mass * Dalton * Sigma * Sigma * nm * nm / (Epsilon * kB));
-      resolution = 50;
-      positions = {Vec3(1, 1, 1)};
-      velocities = {Vec3(-1, 0, 0)};
-    } else if (argc == 1) {
-      system_size = 7;
-      N = 7;
-      steps = 3000000;
-      dt = 1 * fs /
-           std::sqrt(Mass * Dalton * Sigma * Sigma * nm * nm / (Epsilon * kB));
-      resolution = 10000;
-      /*
-      positions = np.array([[0.00, 0.00], [0.02, 0.39], [0.34, 0.17], [0.36,
-      -0.21],
-                    [-0.02, -0.40], [-0.35, -0.16], [-0.31, 0.21]]) * 1e-9
-      velocities = np.array([[-30.00, -20.00], [50.00, -90.00], [-70.00,
-      -60.00], [90.00, 40.00], [80.00, 90.00], [-40.00, 100.00], [-80.00,
-      -60.00]])
-       */
-      positions = {Vec3(0.00, 0.00, 0),   Vec3(0.02, 0.39, 0),
-                   Vec3(0.34, 0.17, 0),   Vec3(0.36, -0.21, 0),
-                   Vec3(-0.02, -0.40, 0), Vec3(-0.35, -0.16, 0),
-                   Vec3(-0.31, 0.21, 0)};
-      for (auto &position : positions) {
-        position =
-            (position / Sigma + Vec3(0.5 * system_size, 0.5 * system_size, 0));
-        std::cout << position.x() << " " << position.y() << " " << position.z()
-                  << std::endl;
-      }
-      velocities = {1 * Vec3(-0.3, -0.2, 0), 1 * Vec3(0.5, -0.9, 0),
-                    1 * Vec3(-0.7, -0.6, 0), 1 * Vec3(0.9, 0.4, 0),
-                    1 * Vec3(0.8, 0.9, 0),   1 * Vec3(-0.4, 1.00, 0),
-                    1 * Vec3(-0.8, -0.6, 0)};
-    } else {
-      std::cout << "Usage: " << argv[0]
-                << " [system_size] [N] [T_init] [steps] [dt] [resolution]"
-                << std::endl;
-      return -1;
+    UniformRandomFloat random{};
+    constexpr double system_size = SYSTEM_SIZE;
+    constexpr size_t num_atoms = NUM_ATOMS;
+    const std::vector<Vec3> positions = cubicLattice(num_atoms, system_size);
+    std::vector velocities(num_atoms, Vec3());
+    constexpr double T_init = T_INIT/Epsilon;
+    const double v0 = std::sqrt(3 * T_init);
+    for (int i = 0; i < num_atoms; ++i) {
+        velocities[i] = v0*unit_velocities[std::floor(random()*6)];
     }
     const char filename[]= "data.txt";
-    System atom_system(system_size, positions, velocities, T_init);
+    System<BOX_N,NUM_ATOMS> atom_system(system_size, positions, velocities, T_init);
     // start time measurement
     const auto start = std::chrono::high_resolution_clock::now();
     // run the simulation
+    constexpr size_t steps = STEPS;
+    const double dt =
+        DT * fs /
+        std::sqrt(Mass * Dalton * Sigma * Sigma * nm * nm / (Epsilon * kB));
+    constexpr size_t resolution = RESOLUTION;
     atom_system.run(steps, dt, &filename[0], resolution);
 	std::cout << "Potential energy: " << atom_system.getPotentialEnergy() << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
-    const std::chrono::duration<float> elapsed_seconds = end-start;
+    const std::chrono::duration<double> elapsed_seconds = end-start;
     std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
     std::cout << "Data written to data.txt\n";
     return 0;
 }
-
 
 
