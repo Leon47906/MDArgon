@@ -56,6 +56,20 @@ class UniformRandomFloat{
     }
 };
 
+class NormalRandomFloat {
+    std::random_device rd;
+    std::mt19937 gen;
+    std::normal_distribution<double> dis;
+    public:
+    explicit NormalRandomFloat(const double sigma) :
+    gen(rd()), dis(0, sigma) {}
+    NormalRandomFloat(const size_t& seed, const double sigma) :
+    gen(seed), dis(0, sigma) {}
+    double operator()() {
+        return dis(gen);
+    }
+};
+
 // Dreiervektor
 
 struct Vec3{

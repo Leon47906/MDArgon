@@ -1,9 +1,10 @@
 #include "verlet.hpp"
-#define SYSTEM_SIZE 20
-#define NUM_ATOMS 3000
-#define BOX_N ((10 * SYSTEM_SIZE / 25) + 1)
-#define T_INIT 50
+#define SYSTEM_SIZE 25
+#define NUM_ATOMS 300
+#define BOX_N ((10 * SYSTEM_SIZE / 25) - 1)
+#define T_INIT 10
 #define STEPS 100000
+
 #define DT 1
 #define RESOLUTION 100
 
@@ -54,15 +55,15 @@ std::vector<Vec3> cubicLattice(const int N, const double system_size) {
 
 int main(int argc, char *argv[]) {
     // parameters
-    UniformRandomFloat random{};
     constexpr double system_size = SYSTEM_SIZE;
     constexpr size_t num_atoms = NUM_ATOMS;
     const std::vector<Vec3> positions = cubicLattice(num_atoms, system_size);
     std::vector velocities(num_atoms, Vec3());
     constexpr double T_init = T_INIT/Epsilon;
-    const double v0 = std::sqrt(3 * T_init);
+    const double sigma_v = std::sqrt(T_init/Mass);
+    NormalRandomFloat random(sigma_v);
     for (int i = 0; i < num_atoms; ++i) {
-        velocities[i] = v0*unit_velocities[std::floor(random()*6)];
+        velocities[i] = {random(), random(), random()};
     }
     const char filename[]= "data.txt";
     System<BOX_N,NUM_ATOMS> atom_system(system_size, positions, velocities, T_init);
@@ -74,7 +75,7 @@ int main(int argc, char *argv[]) {
         DT * fs /
         std::sqrt(Mass * Dalton * Sigma * Sigma * nm * nm / (Epsilon * kB));
     constexpr size_t resolution = RESOLUTION;
-    atom_system.run(steps, dt, &filename[0], resolution);
+     atom_system.run(steps, dt, &filename[0], resolution);
 	std::cout << "Potential energy: " << atom_system.getPotentialEnergy() << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
     const std::chrono::duration<double> elapsed_seconds = end-start;

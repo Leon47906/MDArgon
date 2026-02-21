@@ -1,4 +1,11 @@
 #include "verlet.hpp"
+#define NUM_ATOMS 500
+#define SYSTEM_SIZE 25
+#define BOX_N ((10 * SYSTEM_SIZE / 25) - 1)
+#define T_INIT 50
+#define SWEEPS 100000
+#define RUNUP 5000
+#define DR 1
 
 using json = nlohmann::json;
 
@@ -83,11 +90,11 @@ std::vector<Vec3> cubicLattice(const int N, const double system_size) {
 // Funktion, welche die Akzeptanzrate berechnet
 
 void acceptanceRate(double* acceptance_ptr, double* dpotentials_ptr,
-    const System &atom_system, const double &sum_of_potentials,
+    const System<BOX_N,NUM_ATOMS> &atom_system, const double &sum_of_potentials,
     const int &atom_idx, const Vec3 &new_position, const double &T) {
     const double system_size = atom_system.getSystemSize();
-    const std::vector<double> &potentials = atom_system.getPotentialEnergies();
-    std::vector<double> new_potentials = potentials;
+    const std::array<double, NUM_ATOMS> &potentials = atom_system.getPotentialEnergies();
+    std::array<double, NUM_ATOMS> new_potentials = potentials;
     double* dpotentials = dpotentials_ptr;
     double sum_of_new_potentials = sum_of_potentials;
     for (const size_t i : atom_system.getAdjacentAtoms(new_position)) {
@@ -115,14 +122,14 @@ void acceptanceRate(double* acceptance_ptr, double* dpotentials_ptr,
 
 // Funktion, welche einen Monte-Carlo-Schritt durchführt
 
-void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr,
+void MC_step(System<BOX_N,NUM_ATOMS> *atom_system_ptr, double *sum_of_potentials_ptr,
     const int &atom_idx, UniformRandomFloat *rd_ptr, const double &dr,
     const double &T, int *Naccept_ptr) {
-    System &atom_system = *atom_system_ptr;
+    auto &atom_system = *atom_system_ptr;
     UniformRandomFloat &rd = *rd_ptr;
     double &sum_of_potentials = *sum_of_potentials_ptr;
-    const size_t &N = atom_system.getN();
-    const std::vector<double> &potential = atom_system.getPotentialEnergies();
+    constexpr size_t N = NUM_ATOMS;
+    const std::array<double, N> &potential = atom_system.getPotentialEnergies();
     const Vec3 position = atom_system.getAtom(atom_idx).getPosition();
     const Vec3 displacement = dr/std::sqrt(3) * Vec3(2*rd()-1, 2*rd()-1, 2*rd()-1);
     const Vec3 prop_position = atom_system.PeriodicPositionUpdate(position, displacement, 1.0);
@@ -133,7 +140,7 @@ void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr,
     int &Naccept = *Naccept_ptr;
     if (rd() < acceptance_rate) {
         atom_system.updatePosition(atom_idx, prop_position);
-        std::vector<double> new_potentials = potential;
+        std::array<double, N> new_potentials = potential;
         for (int i = 0; i < N; i++) {
             new_potentials[i] += dpotentials[i];
             sum_of_potentials += dpotentials[i];
@@ -146,11 +153,11 @@ void MC_step(System *atom_system_ptr, double *sum_of_potentials_ptr,
 
 // Funktion, welche einen Monte-Carlo-Sweep durchführt
 
-void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr,
+void MC_sweep(System<BOX_N,NUM_ATOMS> *atom_system_ptr, double *sum_of_potentials_ptr,
     UniformRandomFloat *rd_ptr, const double &dr, const double &T,
     int *Naccept_ptr) {
-    System &atom_system = *atom_system_ptr;
-    const size_t N = atom_system.getN();
+    auto &atom_system = *atom_system_ptr;
+  constexpr size_t N = NUM_ATOMS;
     for (int i = 0; i < N; i++) {
         MC_step(&atom_system, sum_of_potentials_ptr, i, rd_ptr, dr, T, Naccept_ptr);
     }
@@ -159,48 +166,18 @@ void MC_sweep(System *atom_system_ptr, double *sum_of_potentials_ptr,
 // Hauptprogramm
 
 int main(int argc, char *argv[]) {
-    if (!(argc == 8 || argc == 2)) {
-        std::cout << "Usage: " << argv[0] << " [system_size] [N] [T_init] [sweeps] [dr] [seed] [runup]" << std::endl;
-        return -1;
-    }
     // parameters
-    double system_size;
-    int N;
-    double T_init;
-    int sweeps;
-    double dr;
-    int seed;
-    int runup;
-    if (argc == 8) {
-        system_size = atof(argv[1]);
-        N = atoi(argv[2]);
-        T_init = atof(argv[3])/Epsilon;
-        sweeps = atoi(argv[4]);
-        dr = atof(argv[5]);
-        seed = atoi(argv[6]);
-        runup = atoi(argv[7]);
-    }
-    if (argc == 2) {
-        std::string filename = argv[1];
-        std::ifstream f(filename);
-        if (!f.good()) {
-            throw std::runtime_error("Could not open file " + filename);
-        }
-        json setup = json::parse(f);
-        system_size = setup["system_size"];
-        N = setup["N"];
-        T_init = setup["T_init"];
-        sweeps = setup["sweeps"];
-        dr = setup["dr"];
-        seed = setup["seed"];
-        runup = setup["runup"];
-        if (seed == -1) seed = static_cast<int>(std::random_device()());
-    }
-    UniformRandomFloat random(seed);
+    constexpr double system_size = SYSTEM_SIZE;
+    constexpr size_t N = NUM_ATOMS;
+    constexpr double T_init = T_INIT;
+    constexpr size_t sweeps = SWEEPS;
+    double dr = DR;
+    constexpr size_t runup = RUNUP;
+    UniformRandomFloat random{};
     std::vector<Vec3> positions(N, Vec3()), velocities(N, Vec3());
     positions = cubicLattice(N, system_size);
     initialize_vs();
-    System atom_system(system_size, positions, velocities, T_init);
+    System<BOX_N,NUM_ATOMS> atom_system(system_size, positions, velocities, T_init);
     // start the timer
     auto start = std::chrono::high_resolution_clock::now();
     double potentialEnergies = atom_system.computePotentialEnergy();
@@ -212,7 +189,7 @@ int main(int argc, char *argv[]) {
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
         // automatische Steuerung von dr
         if (double acceptance_rate = static_cast<double>(Naccept) / (N);
-            acceptance_rate < 0.15 && dr > 0.1) {
+            acceptance_rate < 0.15 && dr*0.9 > 0.1) {
         	dr *= 0.9;
         }
         else if (acceptance_rate > 0.25 && dr < system_size/2) {
@@ -221,35 +198,35 @@ int main(int argc, char *argv[]) {
         if (i % (runup/50) == 0) {
             int barWidth = 50;
             std::cout << "[";
-            int pos = barWidth * i / runup;
+            size_t pos = barWidth * i / runup;
             for (int j = 0; j < barWidth; ++j) {
                 if (j < pos) std::cout << "=";
                 else if (j == pos) std::cout << ">";
                 else std::cout << " ";
             }
-            std::cout << "] " << 2*int(i * 50 / runup) << " %\r";
+            std::cout << "] " << 2* static_cast<int>(i * 50 / runup) << " %\r";
             std::cout.flush();
         }
     }
     std::cout << "[" << std::string(50, '=') << "] 100%\n";
     int global_Naccept = 0;
-    for (int i = 0; i < sweeps; i++) {
+    for (size_t i = 0; i < sweeps; i++) {
       	int Naccept = 0;
         MC_sweep(&atom_system, &potentialEnergies, &random, dr, T_init, &Naccept);
         double acceptance_rate = static_cast<double>(Naccept)/(N);
         global_Naccept += Naccept;
         // adjusst dr, such that an acceptance rate of 20% is achieved
-        if (acceptance_rate < 0.15 && dr > 0.1) {
+        if (acceptance_rate < 0.15 && dr*0.9 > 0.1) {
         	dr *= 0.9;
         }
-        else if (acceptance_rate > 0.25 && dr < 2.5) {
+        else if (acceptance_rate > 0.25 && dr*1.1 < 2.5) {
         	dr *= 1.1;
         }
         if (i % (sweeps/50) == 0) {
             int barWidth = 50;
             std::cout << "[";
-            int pos = barWidth * i / sweeps;
-            for (int j = 0; j < barWidth; ++j) {
+            size_t pos = barWidth * i / sweeps;
+            for (size_t j = 0; j < barWidth; ++j) {
                 if (j < pos) std::cout << "=";
                 else if (j == pos) std::cout << ">";
                 else std::cout << " ";
