@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <vector>
@@ -23,6 +24,8 @@ constexpr double Epsilon = 137.9;            // Epsilon in kB*K
 constexpr double shift = -0.016316891136;    // potential shift
 constexpr double Mass = 39.948;              // mass of Argon in Dalton
 constexpr double one_over_sqrt_pi = 0.5 * M_2_SQRTPI;
+
+constexpr size_t EMPTY = std::numeric_limits<size_t>::max();
 
 // Potential
 
@@ -207,9 +210,9 @@ template <size_t box_N, size_t N> class System {
   const double system_size;
   // size_t box_N=std::ceil(system_size/2.5), N;
   const double box_L = system_size / static_cast<double>(box_N);
-  std::vector<Cell<N>> cells;
-  // std::array<size_t, box_N * box_N * box_N> head;
-  // std::array<size_t, N> next;
+  // std::vector<Cell<N>> cells;
+  std::array<size_t, box_N * box_N * box_N> head;
+  std::array<size_t, N> next;
   std::array<Atom, N> atoms;
   std::array<Vec3, N> accels;
   std::array<double, N> E_pot, E_kin;
@@ -218,24 +221,21 @@ template <size_t box_N, size_t N> class System {
 public:
   System(const double _system_size, const std::vector<Vec3> &_positions,
          const std::vector<Vec3> &_velocities, double _T_init)
-      : system_size(_system_size), T_init(_T_init),
-        cells(box_N * box_N * box_N) {
+      : system_size(_system_size), T_init(_T_init) {
     if (_positions.size() != _velocities.size()) {
       throw std::invalid_argument("Positions and velocities do not match.");
     }
     if (_positions.size() != N) {
       throw std::invalid_argument("Positions and velocities do not match.");
     }
+    std::fill(head.begin(), head.end(), EMPTY);
     for (size_t i = 0; i < N; i++) {
       Vec3 position = _positions[i];
       Vec3 velocity = _velocities[i];
       atoms[i] = Atom(position, velocity);
-      size_t index = 0;
-      index += std::floor(position.x / box_L);
-      index += static_cast<size_t>(std::floor(position.y / box_L)) * box_N;
-      index +=
-          static_cast<size_t>(std::floor(position.z / box_L)) * box_N * box_N;
-      cells[index].push_back(i);
+      size_t c = getCellIdx(position);
+      next[i] = head[c];
+      head[c] = i;
     }
   }
   // assignment operator
@@ -256,7 +256,8 @@ public:
   [[nodiscard]] static size_t getN() { return N; }
   [[nodiscard]] std::vector<Atom> getAtoms() const { return atoms; }
   [[nodiscard]] static size_t getBoxN() { return box_N; }
-  [[nodiscard]] auto getCells() const { return cells; }
+  [[nodiscard]] auto getHead() const { return head; }
+  [[nodiscard]] auto getNext() const { return next; }
   [[nodiscard]] double getSystemSize() const { return system_size; }
   [[nodiscard]] double getPotentialEnergy() const {
     return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
