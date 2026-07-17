@@ -34,3 +34,5 @@ _deps/
 cmake_install.cmake
 compile_commands.json
 nlohmann/
+energies.png
+macro_plot.png

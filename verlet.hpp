@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -156,53 +157,6 @@ public:
   void setVelocity(const Vec3 &velocity) { this->velocity = velocity; }
 };
 
-// Cell Klasse
-
-template <size_t N> struct Cell {
-  std::array<size_t, N> atom_indices;
-  size_t num_atoms;
-  Cell() : num_atoms(0) {}
-  Cell(const Cell &other) = default;
-  Cell &operator=(const Cell &other) = default;
-  [[nodiscard]] bool empty() const { return num_atoms == 0; }
-  [[nodiscard]] size_t size() const { return num_atoms; }
-  void push_back(const size_t &atom_index) {
-    atom_indices[num_atoms] = atom_index;
-    num_atoms++;
-  }
-  void pop_back() { num_atoms--; }
-  void remove(const size_t &atom_index) {
-    bool found = false;
-    for (size_t i = 0; i < num_atoms; i++) {
-      if (atom_indices[i] == atom_index) {
-        const size_t temp = atom_indices[i];
-        atom_indices[i] = atom_indices[num_atoms - 1];
-        atom_indices[num_atoms - 1] = temp;
-        num_atoms--;
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      std::cerr << "Atom not in cell, cannot remove." << std::endl;
-    }
-  }
-  size_t operator[](const size_t &index) const {
-    if (index >= num_atoms) {
-      throw std::out_of_range("index out of range.");
-    }
-    return atom_indices[index];
-  }
-  using iterator = typename std::array<size_t, N>::iterator;
-  using const_iterator = typename std::array<size_t, N>::const_iterator;
-  iterator begin() { return atom_indices.begin(); }
-  iterator end() { return atom_indices.begin() + num_atoms; }
-  const_iterator begin() const { return atom_indices.begin(); }
-  const_iterator end() const { return atom_indices.begin() + num_atoms; }
-  const_iterator cbegin() const { return atom_indices.begin(); }
-  const_iterator cend() const { return atom_indices.begin() + num_atoms; }
-};
-
 // System Klasse
 
 template <size_t box_N, size_t N> class System {
@@ -210,6 +164,7 @@ template <size_t box_N, size_t N> class System {
   const double system_size;
   // size_t box_N=std::ceil(system_size/2.5), N;
   const double box_L = system_size / static_cast<double>(box_N);
+  const size_t average_atoms_per_cell;
   // std::vector<Cell<N>> cells;
   std::array<size_t, box_N * box_N * box_N> head;
   std::array<size_t, N> next;
@@ -221,7 +176,8 @@ template <size_t box_N, size_t N> class System {
 public:
   System(const double _system_size, const std::vector<Vec3> &_positions,
          const std::vector<Vec3> &_velocities, double _T_init)
-      : system_size(_system_size), T_init(_T_init) {
+      : system_size(_system_size), T_init(_T_init),
+        average_atoms_per_cell(N / (box_N * box_N * box_N)) {
     if (_positions.size() != _velocities.size()) {
       throw std::invalid_argument("Positions and velocities do not match.");
     }
@@ -307,64 +263,56 @@ public:
     return neighbors;
   }
   // Funktion, welche eine Zelle zurückgibt
-  [[nodiscard]] auto getCell(const size_t cell_index) const {
-    return cells[cell_index];
-  }
+  //[[nodiscard]] auto getcell(const size_t cell_index) const {
+  //  return cells[cell_index];
+  //}
   // Funktion, welche die Indizes der Atome in den Nachbarzellen einer Zelle
   // zurückgibt
-  [[nodiscard]] std::array<size_t, N>
+  [[nodiscard]] std::vector<size_t>
   getAtomsInNeighboringCells(const size_t cell_index) const {
     const auto neighbors = getNeighboringCells(cell_index);
-    std::array<size_t, N> atoms_in_neighbors;
-    size_t index = 0;
-    Cell<N> atoms_in_cell;
+    std::vector<size_t> atoms_in_neighbors;
+    atoms_in_neighbors.reserve(26 * average_atoms_per_cell);
     for (const size_t neighbor : neighbors) {
-      atoms_in_cell = getCell(neighbor);
-      for (const auto &atom_idx : atoms_in_cell) {
-        atoms_in_neighbors[index] = atom_idx;
-        index++;
+      for (size_t i = head[neighbor]; i != EMPTY; i = next[i]) {
+        atoms_in_neighbors.push_back(i);
       }
-      // atoms_in_neighbors.insert(atoms_in_neighbors.end(),
-      //     atoms_in_cell.begin(), atoms_in_cell.end());
     }
     return atoms_in_neighbors;
   }
   // Funktion, welche die Indizes der Atome zurückgibt, die mit einem Atom in
   // Wechselwirkung stehen
-  [[nodiscard]] std::array<size_t, N>
+  [[nodiscard]] std::vector<size_t>
   getAdjacentAtoms(const size_t atom_index) const {
     const size_t cell_index = getCellIdx(atoms[atom_index].getPosition());
-    std::array<size_t, N> adjacent_atoms;
-    size_t index = 0;
-    for (size_t atom : getCell(cell_index)) {
-      if (atom != atom_index) {
-        adjacent_atoms[index] = atom;
-        index++;
-      }
+    std::vector<size_t> adjacent_atoms;
+    adjacent_atoms.reserve(27 * average_atoms_per_cell);
+    for (size_t i = head[cell_index]; i != EMPTY; i = next[i]) {
+      adjacent_atoms.push_back(i);
     }
-    const std::array<size_t, N> neighbors =
+    if (auto it =
+            std::find(adjacent_atoms.begin(), adjacent_atoms.end(), atom_index);
+        it != adjacent_atoms.end()) {
+      adjacent_atoms.erase(it);
+    }
+    const std::vector<size_t> neighbors =
         getAtomsInNeighboringCells(cell_index);
-    for (const auto &neighbor : neighbors) {
-      adjacent_atoms[index] = neighbor;
-      index++;
-    }
-    return neighbors;
+    adjacent_atoms.insert(adjacent_atoms.end(), neighbors.begin(),
+                          neighbors.end());
+    return adjacent_atoms;
   }
-  [[nodiscard]] std::array<size_t, N>
+  [[nodiscard]] std::vector<size_t>
   getAdjacentAtoms(const Vec3 &position) const {
     const size_t cell_index = getCellIdx(position);
-    std::array<size_t, N> adjacent_atoms;
-    size_t index = 0;
-    for (size_t atom : getCell(cell_index)) {
-      adjacent_atoms[index] = atom;
-      index++;
+    std::vector<size_t> adjacent_atoms;
+    adjacent_atoms.reserve(27 * average_atoms_per_cell);
+    for (size_t i = head[cell_index]; i != EMPTY; i = next[i]) {
+      adjacent_atoms.push_back(i);
     }
-    const std::array<size_t, N> neighbors =
+    const std::vector<size_t> neighbors =
         getAtomsInNeighboringCells(cell_index);
-    for (const auto &neighbor : neighbors) {
-      adjacent_atoms[index] = neighbor;
-      index++;
-    }
+    adjacent_atoms.insert(adjacent_atoms.end(), neighbors.begin(),
+                          neighbors.end());
     return adjacent_atoms;
   }
   // Debugging Funktionen
@@ -414,20 +362,17 @@ public:
     std::fill(accels.begin(), accels.end(), Vec3());
     std::fill(E_pot.begin(), E_pot.end(), 0);
     virial = 0;
-    Cell<N> cell, cell1;
     std::array<size_t, 26> neighboring_cells{};
     for (size_t cell_index = 0; cell_index < box_N * box_N * box_N;
          ++cell_index) {
-      cell = cells[cell_index];
-      neighboring_cells = getNeighboringCells(cell_index);
-      if (cell.empty())
+      if (head[cell_index] == EMPTY)
         continue;
+      neighboring_cells = getNeighboringCells(cell_index);
       // Compute interactions within the same cell
-      const size_t size = cell.size();
-      for (size_t i = 0; i < size; i++) {
-        for (size_t j = i + 1; j < size; j++) {
-          const size_t atom_i = cell[i];
-          const size_t atom_j = cell[j];
+      for (size_t atom_i = head[cell_index]; atom_i != EMPTY;
+           atom_i = next[atom_i]) {
+        for (size_t atom_j = next[atom_i]; atom_j != EMPTY;
+             atom_j = next[atom_j]) {
           const Vec3 ri = atoms[atom_i].getPosition();
           const Vec3 rj = atoms[atom_j].getPosition();
           const Vec3 r = ri - rj;
@@ -444,9 +389,10 @@ public:
       }
       // Compute interactions with neighboring cells
       for (const size_t neighbor_cell_idx : neighboring_cells) {
-        cell1 = cells[neighbor_cell_idx];
-        for (const size_t atom_i : cell) {
-          for (const size_t atom_j : cell1) {
+        for (size_t atom_i = head[cell_index]; atom_i != EMPTY;
+             atom_i = next[atom_i]) {
+          for (size_t atom_j = head[neighbor_cell_idx]; atom_j != EMPTY;
+               atom_j = next[atom_j]) {
             const Vec3 r =
                 PeriodicDifference(atoms[atom_i].getPosition(),
                                    atoms[atom_j].getPosition(), system_size);
@@ -479,16 +425,17 @@ public:
   void update_positions(const double &dt) {
     for (size_t i = 0; i < N; i++) {
       Vec3 position = atoms[i].getPosition();
-      size_t old_cell_idx = getCellIdx(position);
       const Vec3 velocity = atoms[i].getVelocity();
       // transform the position according to periodic boundary conditions
       position = PeriodicPositionUpdate(position, velocity, dt);
       size_t new_cell_idx = getCellIdx(position);
       atoms[i].setPosition(position);
-      if (old_cell_idx != new_cell_idx) {
-        cells[old_cell_idx].remove(i);
-        cells[new_cell_idx].push_back(i);
-      }
+    }
+    std::fill(head.begin(), head.end(), EMPTY);
+    for (size_t i = 0; i < N; i++) {
+      const size_t cell_idx = getCellIdx(atoms[i].getPosition());
+      next[i] = head[cell_idx];
+      head[cell_idx] = i;
     }
   }
   // Funktion, welche die Geschwindigkeiten der Atome aktualisiert

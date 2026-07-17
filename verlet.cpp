@@ -1,9 +1,9 @@
 #include "verlet.hpp"
 #define SYSTEM_SIZE 25
-#define NUM_ATOMS 300
+#define NUM_ATOMS 1000
 #define BOX_N ((10 * SYSTEM_SIZE / 25) - 1)
 #define T_INIT 10
-#define STEPS 100000
+#define STEPS 200000
 
 #define DT 1
 #define RESOLUTION 100
