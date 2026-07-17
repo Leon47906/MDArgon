@@ -27,13 +27,12 @@ Both modes share the same underlying particle system, cell-list infrastructure, 
 ├── verlet.hpp          # Core simulation engine: Atom, Cell/linked-list, System classes,
 │                       # Lennard-Jones potential, Verlet integrator
 ├── verlet_main.cpp     # MD simulation entry point (velocity-Verlet)
-├── mc_main.cpp         # Monte Carlo simulation entry point (Metropolis sampling)
-├── pdf_analysis/       # Pair distribution function computation and plotting scripts
+├── monte_carlo.cpp     # Monte Carlo simulation entry point (Metropolis sampling)
+├── PDF.cpp             # Pair distribution function computation
 ├── CMakeLists.txt      # Build configuration
 └── README.md
 ```
 
-*(Adjust file/folder names above to match your actual repository layout.)*
 
 ## Building
 
@@ -56,7 +55,7 @@ cmake --build .
 ### Molecular Dynamics Simulation
 
 ```bash
-./verlet_sim
+./verlet
 ```
 
 Runs velocity-Verlet integration for `SWEEPS` steps at initial temperature `T_INIT`, writing atom positions, potential/kinetic energy, and virial data to a trajectory file at the configured `resolution`. Key parameters (system size, atom count, timestep, cell-grid resolution) are set as compile-time constants at the top of the source file and can be adjusted before building.
@@ -64,7 +63,7 @@ Runs velocity-Verlet integration for `SWEEPS` steps at initial temperature `T_IN
 ### Monte Carlo Simulation (experimental)
 
 ```bash
-./mc_sim
+./mc
 ```
 
 Performs `RUNUP` equilibration sweeps followed by `SWEEPS` production sweeps of single-particle Metropolis moves, with automatic step-size (`dr`) tuning to maintain a target acceptance rate (~20%). Potential energy per sweep is written to `MCdata.txt`.
@@ -90,7 +89,7 @@ Given a trajectory or configuration snapshot, the PDF analysis tools compute g(r
 
 ## License
 
-*(Add your chosen license here, e.g. MIT.)*
+MIT
 
 ## Acknowledgments
 
