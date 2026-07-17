@@ -19,6 +19,7 @@
 /mc_energy.exe
 .DS_Store
 .clang-format
+.clangd
 .idea/MDArgon.iml
 .idea/copilot.data.migration.ask2agent.xml
 .idea/editor.xml

@@ -55,9 +55,9 @@ class UniformRandomFloat {
   std::uniform_real_distribution<double> dis;
 
 public:
-  UniformRandomFloat() : gen(rd()), dis(0, 1) {}
-  explicit UniformRandomFloat(const int &seed) : gen(seed), dis(0, 1) {}
-  double operator()() { return dis(gen); }
+  UniformRandomFloat();
+  explicit UniformRandomFloat(const int &seed);
+  double operator()();
 };
 
 class NormalRandomFloat {
@@ -66,10 +66,9 @@ class NormalRandomFloat {
   std::normal_distribution<double> dis;
 
 public:
-  explicit NormalRandomFloat(const double sigma) : gen(rd()), dis(0, sigma) {}
-  NormalRandomFloat(const size_t &seed, const double sigma)
-      : gen(seed), dis(0, sigma) {}
-  double operator()() { return dis(gen); }
+  explicit NormalRandomFloat(const double sigma);
+  NormalRandomFloat(const size_t &seed, const double sigma);
+  double operator()();
 };
 
 // Dreiervektor
@@ -111,11 +110,6 @@ struct Vec3 {
 inline double dot(const Vec3 &v1, const Vec3 &v2) {
   return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
-
-void test() {}
-const static std::array<Vec3, 6> unit_velocities{
-    Vec3(1, 0, 0),  Vec3(0, 1, 0),  Vec3(0, 0, 1),
-    Vec3(-1, 0, 0), Vec3(0, -1, 0), Vec3(0, 0, -1)};
 
 // Periodische Randbedingungen
 
@@ -175,40 +169,7 @@ template <size_t box_N, size_t N> class System {
 
 public:
   System(const double _system_size, const std::vector<Vec3> &_positions,
-         const std::vector<Vec3> &_velocities, double _T_init)
-      : system_size(_system_size), T_init(_T_init),
-        average_atoms_per_cell(N / (box_N * box_N * box_N)) {
-    if (_positions.size() != _velocities.size()) {
-      throw std::invalid_argument("Positions and velocities do not match.");
-    }
-    if (_positions.size() != N) {
-      throw std::invalid_argument("Positions and velocities do not match.");
-    }
-    std::fill(head.begin(), head.end(), EMPTY);
-    for (size_t i = 0; i < N; i++) {
-      Vec3 position = _positions[i];
-      Vec3 velocity = _velocities[i];
-      atoms[i] = Atom(position, velocity);
-      size_t c = getCellIdx(position);
-      next[i] = head[c];
-      head[c] = i;
-    }
-  }
-  // assignment operator
-  /*
-  System& operator=(const System& other) {
-      if (this != &other) {
-          system_size = other.system_size;
-          box_L = other.box_L;
-          cells = other.cells;
-          atoms = other.atoms;
-          accels = other.accels;
-          E_pot = other.E_pot;
-          E_kin = other.E_kin;
-      }
-      return *this;
-  }
-  */
+         const std::vector<Vec3> &_velocities, double _T_init);
   [[nodiscard]] static size_t getN() { return N; }
   [[nodiscard]] std::vector<Atom> getAtoms() const { return atoms; }
   [[nodiscard]] static size_t getBoxN() { return box_N; }
@@ -223,14 +184,7 @@ public:
     E_pot = new_potentials;
   }
   // Funktion, welche die Zelle eines Atoms bestimmt
-  [[nodiscard]] size_t getCellIdx(const Vec3 &position) const {
-    size_t index = 0;
-    index += std::floor(position.x / box_L);
-    index += static_cast<size_t>(std::floor(position.y / box_L)) * box_N;
-    index +=
-        static_cast<size_t>(std::floor(position.z / box_L)) * box_N * box_N;
-    return index;
-  }
+  [[nodiscard]] size_t getCellIdx(const Vec3 &position) const;
   [[nodiscard]] Atom getAtom(const size_t atom_index) const {
     return atoms[atom_index];
   }
@@ -257,15 +211,8 @@ public:
         }
       }
     }
-    // std::sort(neighbors.begin(), neighbors.end());
-    // neighbors.erase(std::unique(neighbors.begin(),
-    //     neighbors.end()), neighbors.end());
     return neighbors;
   }
-  // Funktion, welche eine Zelle zurückgibt
-  //[[nodiscard]] auto getcell(const size_t cell_index) const {
-  //  return cells[cell_index];
-  //}
   // Funktion, welche die Indizes der Atome in den Nachbarzellen einer Zelle
   // zurückgibt
   [[nodiscard]] std::vector<size_t>
@@ -358,103 +305,14 @@ public:
   }
   // Funktion, welche die Beschleunigungen der Atome aufgrund der
   // Lennard-Jones-Kräfte berechnet
-  void computeAccels() {
-    std::fill(accels.begin(), accels.end(), Vec3());
-    std::fill(E_pot.begin(), E_pot.end(), 0);
-    virial = 0;
-    std::array<size_t, 26> neighboring_cells{};
-    for (size_t cell_index = 0; cell_index < box_N * box_N * box_N;
-         ++cell_index) {
-      if (head[cell_index] == EMPTY)
-        continue;
-      neighboring_cells = getNeighboringCells(cell_index);
-      // Compute interactions within the same cell
-      for (size_t atom_i = head[cell_index]; atom_i != EMPTY;
-           atom_i = next[atom_i]) {
-        for (size_t atom_j = next[atom_i]; atom_j != EMPTY;
-             atom_j = next[atom_j]) {
-          const Vec3 ri = atoms[atom_i].getPosition();
-          const Vec3 rj = atoms[atom_j].getPosition();
-          const Vec3 r = ri - rj;
-          const double r2 = r.norm2();
-          const Vec3 accel = r * ComputeAccel(r2);
-          const double pot = LennardJones(r2);
-          accels[atom_i] += accel;
-          accels[atom_j] -= accel; // Newton's Third Law
-          // Lennard Jones potential
-          E_pot[atom_i] += pot / 2;
-          E_pot[atom_j] += pot / 2;
-          virial += r2 * accel.norm2();
-        }
-      }
-      // Compute interactions with neighboring cells
-      for (const size_t neighbor_cell_idx : neighboring_cells) {
-        for (size_t atom_i = head[cell_index]; atom_i != EMPTY;
-             atom_i = next[atom_i]) {
-          for (size_t atom_j = head[neighbor_cell_idx]; atom_j != EMPTY;
-               atom_j = next[atom_j]) {
-            const Vec3 r =
-                PeriodicDifference(atoms[atom_i].getPosition(),
-                                   atoms[atom_j].getPosition(), system_size);
-            const double r2 = r.norm2();
-            const Vec3 accel = r * ComputeAccel(r2);
-            const double pot = LennardJones(r2);
-            accels[atom_i] += accel;
-            E_pot[atom_i] += pot / 2;
-            virial += r2 * accel.norm2();
-          }
-        }
-      }
-    }
-  }
-  double computePotentialEnergy() {
-    std::fill(E_pot.begin(), E_pot.end(), 0);
-    for (size_t i = 0; i < N; i++) {
-      for (size_t j = i + 1; j < N; j++) {
-        const Vec3 r = PeriodicDifference(atoms[i].getPosition(),
-                                          atoms[j].getPosition(), system_size);
-        const double r2 = r.norm2();
-        const double pot = LennardJones(r2);
-        E_pot[i] += pot / 2;
-        virial += r2 * ComputeAccel(r2);
-      }
-    }
-    return std::accumulate(E_pot.begin(), E_pot.end(), 0.0);
-  }
+  void computeAccels();
+  double computePotentialEnergy();
   // Funktion, welche die Positionen der Atome aktualisiert
-  void update_positions(const double &dt) {
-    for (size_t i = 0; i < N; i++) {
-      Vec3 position = atoms[i].getPosition();
-      const Vec3 velocity = atoms[i].getVelocity();
-      // transform the position according to periodic boundary conditions
-      position = PeriodicPositionUpdate(position, velocity, dt);
-      size_t new_cell_idx = getCellIdx(position);
-      atoms[i].setPosition(position);
-    }
-    std::fill(head.begin(), head.end(), EMPTY);
-    for (size_t i = 0; i < N; i++) {
-      const size_t cell_idx = getCellIdx(atoms[i].getPosition());
-      next[i] = head[cell_idx];
-      head[cell_idx] = i;
-    }
-  }
+  void update_positions(const double &dt);
   // Funktion, welche die Geschwindigkeiten der Atome aktualisiert
-  void update_velocities(const double &dt) {
-    for (size_t i = 0; i < N; i++) {
-      Vec3 velocity = atoms[i].getVelocity();
-      const Vec3 accel = accels[i];
-      velocity = velocity + accel * dt;
-      atoms[i].setVelocity(velocity);
-      const double v2 = velocity.norm2();
-      E_kin[i] = 0.5 * v2;
-    }
-  }
+  void update_velocities(const double &dt);
   // Funktion, welche einen Zeitschritt des Verlet-Algorithmus durchführt
-  void update(const double &dt) {
-    update_positions(dt);
-    computeAccels();
-    update_velocities(dt);
-  }
+  void update(const double &dt);
   // Funktion, welche die Daten der Atome zurückgibt
   [[nodiscard]] std::array<Vec3, N> getData() const {
     std::array<Vec3, N> data;
@@ -526,4 +384,5 @@ public:
   }
 };
 
+#include "verlet_impl.hpp"
 #endif // VERLET_HPP
